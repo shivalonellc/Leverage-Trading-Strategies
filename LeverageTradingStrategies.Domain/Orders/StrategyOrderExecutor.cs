@@ -70,6 +70,27 @@ namespace LeverageTradingStrategies.Domain.Orders
                     _ => "{}"
                 };
 
+                var (brokerOrderId, brokerStatus, brokerReason) = ParseBrokerResponse(result);
+
+                // The broker call not throwing does NOT mean the order is actually working --
+                // Schwab returns an orderId synchronously as soon as an order is accepted FOR
+                // PROCESSING, then rejects it moments later via an async risk check (e.g. a
+                // price too far from market). SchwabBroker now polls for that and reports
+                // status:"rejected"/"failed" in the JSON body without throwing -- catch that
+                // here rather than blindly marking the order Filled.
+                bool brokerRejected = brokerStatus != null &&
+                    (string.Equals(brokerStatus, "rejected", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(brokerStatus, "failed", StringComparison.OrdinalIgnoreCase));
+
+                if (brokerRejected)
+                {
+                    string failureMessage = brokerReason ?? $"Broker reported status '{brokerStatus}'";
+                    await _orderRepository.MarkFailedAsync(orderId, failureMessage, ct);
+                    _logger.LogError("Order placement REJECTED by broker for {Action} {Symbol} x{Qty} (order #{OrderId}): {Reason} — state may now be out of sync with the real broker position, investigate immediately",
+                        decision.Action, instance.Symbol, decision.Quantity, orderId, failureMessage);
+                    return false;
+                }
+
                 // v1 known simplification: fill price is treated as the same reference price
                 // the strategy used for its decision (best-case-fill assumption, matches the
                 // verified backtest's own documented assumption — see spec doc Section 8).
@@ -77,7 +98,6 @@ namespace LeverageTradingStrategies.Domain.Orders
                 // IBroker.GetOrderFillPriceAsync is a good follow-up hardening step before
                 // trading meaningful size live.
                 decimal fillPrice = referencePrice;
-                string? brokerOrderId = TryExtractOrderId(result);
 
                 decimal? realizedPnl = decision.Action == TqqqWeeklyActionType.SellAll ? decision.EstimatedRealizedPnL : null;
                 await _orderRepository.MarkFilledAsync(orderId, fillPrice, brokerOrderId, realizedPnl, ct);
@@ -108,20 +128,27 @@ namespace LeverageTradingStrategies.Domain.Orders
             }
         }
 
-        private static string? TryExtractOrderId(string brokerJsonResponse)
+        private static (string? orderId, string? status, string? reason) ParseBrokerResponse(string brokerJsonResponse)
         {
             try
             {
                 using var doc = JsonDocument.Parse(brokerJsonResponse);
-                if (doc.RootElement.TryGetProperty("orderId", out var idProp))
-                    return idProp.GetString();
+                var root = doc.RootElement;
+                string? orderId = root.TryGetProperty("orderId", out var idProp) ? idProp.GetString() : null;
+                string? status = root.TryGetProperty("status", out var statusProp) ? statusProp.GetString() : null;
+                string? reason =
+                    root.TryGetProperty("reason", out var reasonProp) ? reasonProp.GetString() :
+                    root.TryGetProperty("message", out var msgProp) ? msgProp.GetString() :
+                    root.TryGetProperty("error", out var errProp) ? errProp.GetString() :
+                    null;
+                return (orderId, status, reason);
             }
             catch (JsonException)
             {
-                // broker response wasn't JSON or didn't have the expected shape -- not fatal,
-                // the order itself already succeeded by the time we get here
+                // broker response wasn't JSON or didn't have the expected shape -- treat as
+                // "unknown, not explicitly rejected" rather than failing the whole call
+                return (null, null, null);
             }
-            return null;
         }
     }
 }

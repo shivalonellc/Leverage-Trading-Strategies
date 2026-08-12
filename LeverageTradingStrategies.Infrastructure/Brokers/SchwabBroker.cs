@@ -1,4 +1,4 @@
-﻿using LeverageTradingStrategies.Infrastructure.Helpers;
+using LeverageTradingStrategies.Infrastructure.Helpers;
 using LeverageTradingStrategies.Infrastructure.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,7 +22,7 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
 
         public SchwabBroker(ILogger<SchwabBroker> logger, IServiceScopeFactory serviceScopeFactory)
         {
-           
+
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
 
@@ -58,6 +58,56 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
             return default;
         }
 
+        /// <summary>
+        /// Schwab's order-placement call returns an orderId synchronously as soon as the
+        /// order is accepted FOR PROCESSING — that is NOT the same as the order being
+        /// accepted/working at the exchange. A limit or stop price too far from the current
+        /// market (among other reasons) gets rejected by a subsequent, asynchronous risk
+        /// check that the synchronous placement response has no visibility into. Without this
+        /// check, a rejected order would be reported back to the caller as "success" even
+        /// though nothing is actually working at the broker. Polls GetOrderAsync briefly
+        /// (Schwab's risk check typically resolves within a second or two) and returns the
+        /// order's real status once it's stopped changing, or "UNCONFIRMED" if it's still
+        /// mid-flight after the poll window — callers should treat UNCONFIRMED as "probably
+        /// fine, but verify manually," not as a rejection.
+        /// </summary>
+        private static async Task<(bool rejected, string status, string? description)> CheckOrderStatusAsync(
+            SchwabApi schwabApi, string accountNumber, long orderId, CancellationToken ct)
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    await Task.Delay(attempt == 0 ? 400 : 700, ct);
+                    var orderResult = await schwabApi.GetOrderAsync(accountNumber, orderId);
+                    var order = orderResult?.Data;
+
+                    if (order?.status == null)
+                        continue;
+
+                    if (string.Equals(order.status, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                        return (true, order.status, order.statusDescription);
+
+                    // Still being risk-checked — give it another pass rather than reporting early.
+                    if (string.Equals(order.status, "PENDING_ACTIVATION", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(order.status, "AWAITING_UR_OUT", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    return (false, order.status, order.statusDescription);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Transient status-lookup failure -- don't let a check hiccup mask an
+                    // otherwise-successful placement. Try again on the next attempt.
+                }
+            }
+
+            return (false, "UNCONFIRMED", "Could not confirm final order status within the check window — verify manually.");
+        }
 
         /// <summary>
         /// Total account equity (liquidationValue — cash plus mark-to-market value of any
@@ -112,7 +162,7 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                     decimal unrealizedProfitLossPercent = costBasis > 0
                         ? (unrealizedProfitLoss / costBasis) * 100
                         : 0;
-                 
+
 
                     decimal netQuantity = longQuantity - shortQuantity;
                     PositionSide side =
@@ -166,7 +216,7 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
             }, $"Finding position details for {symbol}");
         }
 
-      
+
         /// <summary>
         /// Submits an immediate market-order buy package directly into the live broker book.
         /// </summary>
@@ -203,7 +253,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -249,7 +304,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -299,7 +359,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -346,7 +411,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -390,7 +460,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -399,7 +474,11 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
         }
 
         /// <summary>
-        /// Submits a limit sell order pegged to the current asset mark price.
+        /// Submits a limit sell order pegged to the current asset mark price, to close an
+        /// existing long position. TO_CLOSE requires a NEGATIVE quantity for equities to map
+        /// to a plain SELL instruction (see Order.OrderLeg.CalculateInstruction) — a positive
+        /// quantity here maps to BUY_TO_COVER instead (closing a SHORT), which is wrong for a
+        /// long-only exit. Matches the negation PlaceSellMarketOrderAsync already uses.
         /// </summary>
         public async Task<string> PlaceSellLimitOrderAsync(string accountNumber, string symbol, int quantity, CancellationToken ct = default)
         {
@@ -429,14 +508,19 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                     Order.Session.SEAMLESS,
                     Order.Duration.DAY,
                     Order.Position.TO_CLOSE,
-                    quantity,
+                    quantity < 0 ? quantity : quantity * -1, // negative + TO_CLOSE => SELL (positive would be BUY_TO_COVER)
                     price: targetMarkPrice
                 );
 
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, limitPrice = targetMarkPrice, symbol = symbol, quantity = quantity });
             }
             finally
             {
@@ -481,17 +565,26 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = result?.Message ?? "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity, stopPrice = stopPrice });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity, stopPrice = stopPrice });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity, stopPrice = stopPrice });
             }
             finally
             {
                 symLock.Release();
             }
         }
+
         /// <summary>
         /// Submits a limit SELL order at an explicit target price (GTC) to close an existing
         /// long position — the take-profit counterpart to PlaceStopLossOrderAsync. Unlike
         /// PlaceSellLimitOrderAsync, the limit price is caller-supplied, not pegged to mark.
+        /// TO_CLOSE requires a NEGATIVE quantity for equities to map to a plain SELL
+        /// instruction (see Order.OrderLeg.CalculateInstruction) — a positive quantity here
+        /// maps to BUY_TO_COVER instead (closing a SHORT), which is wrong for a long-only exit.
         /// </summary>
         public async Task<string> PlaceTakeProfitOrderAsync(string accountNumber, string symbol, int quantity, decimal limitPrice, CancellationToken ct = default)
         {
@@ -520,14 +613,19 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                     Order.Session.SEAMLESS,
                     Order.Duration.GOOD_TILL_CANCEL,
                     Order.Position.TO_CLOSE,
-                    quantity,
+                    quantity < 0 ? quantity : quantity * -1, // negative + TO_CLOSE => SELL (positive would be BUY_TO_COVER)
                     price: limitPrice
                 );
 
                 if (result?.Data == null)
                     return JsonSerializer.Serialize(new { status = "failed", message = result?.Message ?? "Null structural response from Schwab routing engine" });
 
-                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity, limitPrice = limitPrice });
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, symbol = symbol, quantity = quantity, limitPrice = limitPrice });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, symbol = symbol, quantity = quantity, limitPrice = limitPrice });
             }
             finally
             {
@@ -608,5 +706,5 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
 
     }
 
-  
+
 }
