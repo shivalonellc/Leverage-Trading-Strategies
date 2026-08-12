@@ -26,19 +26,19 @@ namespace LeverageTradingStrategies.Domain.Orders
             _logger = logger;
         }
 
-        public async Task ExecuteAsync(StrategyInstanceRecord instance, TqqqWeeklyDecision decision, decimal referencePrice, string accountNumber, bool isSimulated, CancellationToken ct = default)
+        public async Task<bool> ExecuteAsync(StrategyInstanceRecord instance, TqqqWeeklyDecision decision, decimal referencePrice, string accountNumber, bool isSimulated, CancellationToken ct = default)
         {
             if (decision.Action == TqqqWeeklyActionType.None)
             {
                 _logger.LogDebug("No action: {Reason}", decision.Reason);
-                return;
+                return true;
             }
 
             if (decision.Quantity <= 0)
             {
                 _logger.LogWarning("{Action} decision for {Symbol} had non-positive quantity ({Qty}) — skipping order placement. Reason: {Reason}",
                     decision.Action, instance.Symbol, decision.Quantity, decision.Reason);
-                return;
+                return true;
             }
 
             var side = decision.Action == TqqqWeeklyActionType.SellAll ? StrategyOrderSide.Sell : StrategyOrderSide.Buy;
@@ -89,6 +89,8 @@ namespace LeverageTradingStrategies.Domain.Orders
                     instance.CurrentCapital = newCapital; // keep the caller's in-memory copy in sync for the rest of this tick
                     _logger.LogInformation("Compounding: realized P&L {Pnl:C} rolled into CurrentCapital, now {NewCapital:C}", realizedPnl.Value, newCapital);
                 }
+
+                return true;
             }
             catch (Exception ex)
             {
@@ -102,6 +104,7 @@ namespace LeverageTradingStrategies.Domain.Orders
                 await _orderRepository.MarkFailedAsync(orderId, ex.Message, ct);
                 _logger.LogError(ex, "Order placement FAILED for {Action} {Symbol} x{Qty} (order #{OrderId}) — state may now be out of sync with the real broker position, investigate immediately",
                     decision.Action, instance.Symbol, decision.Quantity, orderId);
+                return false;
             }
         }
 

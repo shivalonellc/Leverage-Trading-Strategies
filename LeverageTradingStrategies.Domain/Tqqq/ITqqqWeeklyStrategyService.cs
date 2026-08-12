@@ -59,7 +59,15 @@ namespace LeverageTradingStrategies.Domain.Tqqq
         /// no-op. If holding, sells the full position at currentPrice and clears position
         /// state exactly like every other exit path (same ClearPositionState mutation), so the
         /// resulting order/state are indistinguishable from a normal strategy-driven exit.
-        /// Takes no config -- it's an unconditional exit, no tuning parameter applies.</summary>
-        TqqqWeeklyDecision EvaluateKillSwitch(TqqqWeeklyState state, decimal currentPrice);
+        /// Takes no config -- it's an unconditional exit, no tuning parameter applies.
+        ///
+        /// brokerConfirmedQuantity, when supplied, OVERRIDES state.Quantity as the amount to
+        /// sell/reconcile against — the kill switch is a safety-critical path, so the caller
+        /// should always pass the broker's own reported position (IBroker.GetSymbolPositionAsync)
+        /// rather than trust local state, which can drift. If it's 0 the position is cleared
+        /// locally with no sell order placed (broker already shows flat); if it differs from
+        /// state.Quantity, the broker figure is used for the sell and the mismatch is called
+        /// out in the decision's Reason (RealizedPnL becomes an approximation in that case).</summary>
+        TqqqWeeklyDecision EvaluateKillSwitch(TqqqWeeklyState state, decimal currentPrice, int? brokerConfirmedQuantity = null);
     }
 }

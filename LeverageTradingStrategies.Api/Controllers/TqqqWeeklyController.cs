@@ -1,8 +1,10 @@
 using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
+using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Data;
 using LeverageTradingStrategies.Infrastructure.Data.Entities;
+using LeverageTradingStrategies.Infrastructure.Models;
 using LeverageTradingStrategies.Infrastructure.Quotes;
 using LeverageTradingStrategies.Infrastructure.State;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +31,7 @@ namespace LeverageTradingStrategies.Api.Controllers
         private readonly IStrategyConfigRepository _configRepository;
         private readonly ITqqqWeeklyConfigProvider _configProvider;
         private readonly IQuoteProvider _quoteProvider;
+        private readonly IBroker _broker;
         private readonly IOptions<AppSettingsOptions> _options;
         private readonly ILogger<TqqqWeeklyController> _logger;
 
@@ -41,6 +44,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             IStrategyConfigRepository configRepository,
             ITqqqWeeklyConfigProvider configProvider,
             IQuoteProvider quoteProvider,
+            IBroker broker,
             IOptions<AppSettingsOptions> options,
             ILogger<TqqqWeeklyController> logger)
         {
@@ -52,6 +56,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             _configRepository = configRepository;
             _configProvider = configProvider;
             _quoteProvider = quoteProvider;
+            _broker = broker;
             _options = options;
             _logger = logger;
         }
@@ -149,32 +154,76 @@ namespace LeverageTradingStrategies.Api.Controllers
             var tqqq = _options.Value.TqqqWeekly;
             var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
 
-            if (instance.Status == StrategyStatus.Killed)
-                return Conflict(new { message = "Cannot pause a Killed instance — it has already been permanently stopped. Nothing else to do." });
-
             await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Paused, ct);
             _logger.LogWarning("Strategy instance #{Id} ({Symbol}) PAUSED via API — no new entries until resumed", instance.Id, instance.Symbol);
             return Ok(new { instance.Id, instance.Symbol, Status = StrategyStatus.Paused.ToString() });
         }
 
+        /// <summary>Resume works from Paused OR Killed — Kill is a strong stop, not a
+        /// one-way door: if a kill attempt ever leaves things in a state you want to walk
+        /// back from (or the position has since been dealt with manually), this re-enables
+        /// normal trading. It does NOT re-open any position on its own.</summary>
         [HttpPost("resume")]
         public async Task<IActionResult> Resume(CancellationToken ct)
         {
             var tqqq = _options.Value.TqqqWeekly;
             var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
 
-            if (instance.Status == StrategyStatus.Killed)
-                return Conflict(new { message = "Cannot resume a Killed instance — Killed is permanent for this instance. Restart with a fresh instance if you need to trade this symbol again." });
-
             await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Running, ct);
-            _logger.LogWarning("Strategy instance #{Id} ({Symbol}) RESUMED via API", instance.Id, instance.Symbol);
+            _logger.LogWarning("Strategy instance #{Id} ({Symbol}) RESUMED via API (was {PreviousStatus})", instance.Id, instance.Symbol, instance.Status);
             return Ok(new { instance.Id, instance.Symbol, Status = StrategyStatus.Running.ToString() });
         }
 
-        /// <summary>Immediate, synchronous square-off: marks the instance Killed (permanent —
-        /// the live job will refuse to act on it ever again) and, if currently holding, sells
-        /// the full position right now via the same IStrategyOrderExecutor the live job uses
-        /// (so this produces an identically-shaped audit row, real or simulated depending on
+        /// <summary>Broker-confirmed snapshot of what a Kill would do right now, for the
+        /// dashboard to show the user before they confirm. Read-only -- does not touch status
+        /// or place any order.</summary>
+        [HttpGet("kill-preview")]
+        public async Task<IActionResult> KillPreview(CancellationToken ct)
+        {
+            var settings = _options.Value;
+            var tqqq = settings.TqqqWeekly;
+            var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
+
+            SymbolPositionInfo? brokerPosition;
+            try
+            {
+                brokerPosition = await _broker.GetSymbolPositionAsync(settings.Trading.AccountNumber, tqqq.Symbol);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kill preview: could not fetch broker position for {Symbol}", tqqq.Symbol);
+                return StatusCode(StatusCodes.Status502BadGateway, new { message = "Could not reach the broker to confirm the current position. Try again before killing." });
+            }
+
+            var quote = await _quoteProvider.GetQuoteAsync(tqqq.Symbol, ct);
+            int brokerQty = (int)(brokerPosition?.LongQuantity ?? 0m);
+
+            return Ok(new
+            {
+                instance.Id,
+                instance.Symbol,
+                Status = instance.Status.ToString(),
+                alreadyKilled = instance.Status == StrategyStatus.Killed,
+                brokerQuantity = brokerQty,
+                brokerAveragePrice = brokerPosition?.AveragePrice,
+                brokerMarketValue = brokerPosition?.MarketValue,
+                quoteAvailable = quote != null,
+                currentPrice = quote?.LastPrice,
+                willSquareOff = brokerQty > 0,
+                message = brokerQty > 0
+                    ? $"Broker shows {brokerQty} share(s) of {tqqq.Symbol} open — killing will sell all {brokerQty} at market and permanently stop new entries until Resumed."
+                    : "Broker shows no open position for this symbol — killing will just stop new entries (nothing to sell)."
+            });
+        }
+
+        /// <summary>Immediate, synchronous square-off. Safe-by-design: the instance is only
+        /// ever marked Killed AFTER the position is confirmed squared off (or confirmed
+        /// already flat) directly against the broker -- if anything along the way fails (no
+        /// broker connectivity, no quote, the sell order itself gets rejected), the instance
+        /// is left Paused (no new entries, but NOT permanently stopped) instead of Killed, so
+        /// it's always safe to retry Kill or Resume normal trading. Uses the same
+        /// IStrategyOrderExecutor the live job uses, so a real square-off order produces an
+        /// identically-shaped audit row in StrategyOrders (real or simulated depending on
         /// AppSettings:Trading:UseSimulatedBroker). Does not wait for the next Quartz tick.</summary>
         [HttpPost("kill")]
         public async Task<IActionResult> Kill(CancellationToken ct)
@@ -186,31 +235,87 @@ namespace LeverageTradingStrategies.Api.Controllers
             if (instance.Status == StrategyStatus.Killed)
                 return Ok(new { instance.Id, instance.Symbol, Status = StrategyStatus.Killed.ToString(), message = "Already Killed — no-op." });
 
-            // Flip the switch FIRST so a concurrently-running job tick (if one happens to be
-            // mid-flight) sees Killed and backs off entirely, rather than racing this
-            // synchronous flatten below.
-            await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Killed, ct);
-            instance.Status = StrategyStatus.Killed;
-            _logger.LogWarning("Strategy instance #{Id} ({Symbol}) KILLED via API — squaring off now", instance.Id, instance.Symbol);
+            // Pause FIRST -- blocks new entries from a concurrently-running job tick while we
+            // work, AND is the safe fallback state if anything below fails: unlike Killed,
+            // Paused can still be Resumed, so a kill attempt that doesn't fully complete never
+            // strands the instance.
+            await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Paused, ct);
+            instance.Status = StrategyStatus.Paused;
 
-            var quote = await _quoteProvider.GetQuoteAsync(tqqq.Symbol, ct);
-            if (quote == null)
+            SymbolPositionInfo? brokerPosition;
+            try
             {
-                _logger.LogError("Kill switch: no quote available for {Symbol} — status is set to Killed but the position could NOT be squared off automatically. Manual intervention required.", tqqq.Symbol);
+                brokerPosition = await _broker.GetSymbolPositionAsync(settings.Trading.AccountNumber, tqqq.Symbol);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kill switch: could not confirm current position with the broker for {Symbol} — kill NOT completed, instance left Paused", tqqq.Symbol);
                 return StatusCode(StatusCodes.Status502BadGateway, new
                 {
                     instance.Id,
                     instance.Symbol,
-                    Status = StrategyStatus.Killed.ToString(),
-                    message = "Status set to Killed, but no quote was available to square off the position. The strategy will place no further orders, but any open position was NOT automatically flattened — close it manually."
+                    Status = StrategyStatus.Paused.ToString(),
+                    message = "Could not confirm the current position with the broker — kill was NOT completed. The instance is Paused (no new entries) but not Killed. Fix connectivity and retry Kill, or Resume to keep trading."
                 });
             }
 
+            int brokerQty = (int)(brokerPosition?.LongQuantity ?? 0m);
             var state = await _stateStore.GetOrCreateAsync(instance.Id, tqqq.Symbol, ct);
-            var decision = _strategy.EvaluateKillSwitch(state, quote.LastPrice);
-            await _orderExecutor.ExecuteAsync(instance, decision, quote.LastPrice, settings.Trading.AccountNumber, settings.Trading.UseSimulatedBroker, ct);
+
+            if (brokerQty <= 0)
+            {
+                // Broker confirms flat -- nothing to square off. Reconcile local state if it
+                // disagreed, then it's safe to mark Killed (no stranded position possible).
+                if (state.Holding)
+                {
+                    _logger.LogWarning("Kill switch: broker reports flat for {Symbol} but local state showed a position — reconciling local state to flat", tqqq.Symbol);
+                }
+                var flatDecision = _strategy.EvaluateKillSwitch(state, 0m, brokerConfirmedQuantity: 0);
+                await _stateStore.SaveAsync(instance.Id, state, ct);
+                await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Killed, ct);
+                _logger.LogWarning("Strategy instance #{Id} ({Symbol}) KILLED via API — no open position at broker", instance.Id, instance.Symbol);
+                return Ok(new
+                {
+                    instance.Id,
+                    instance.Symbol,
+                    Status = StrategyStatus.Killed.ToString(),
+                    message = "Broker confirmed no open position — nothing to square off. Instance Killed.",
+                    squareOff = new { flatDecision.Action, flatDecision.Quantity, flatDecision.Reason }
+                });
+            }
+
+            var quote = await _quoteProvider.GetQuoteAsync(tqqq.Symbol, ct);
+            if (quote == null)
+            {
+                _logger.LogError("Kill switch: broker shows {Qty} open share(s) of {Symbol} but no quote is available to price the square-off — kill NOT completed, instance left Paused", brokerQty, tqqq.Symbol);
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    instance.Id,
+                    instance.Symbol,
+                    Status = StrategyStatus.Paused.ToString(),
+                    openPosition = new { quantity = brokerQty, averagePrice = brokerPosition!.AveragePrice },
+                    message = $"Broker shows {brokerQty} share(s) of {tqqq.Symbol} still open, but no quote is available to square it off — kill was NOT completed. The instance is Paused; retry Kill once quotes are available."
+                });
+            }
+
+            var decision = _strategy.EvaluateKillSwitch(state, quote.LastPrice, brokerConfirmedQuantity: brokerQty);
+            bool success = await _orderExecutor.ExecuteAsync(instance, decision, quote.LastPrice, settings.Trading.AccountNumber, settings.Trading.UseSimulatedBroker, ct);
             await _stateStore.SaveAsync(instance.Id, state, ct);
 
+            if (!success)
+            {
+                _logger.LogError("Kill switch: square-off order FAILED for {Symbol} — kill NOT completed, instance left Paused so it can be retried or resumed", tqqq.Symbol);
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    instance.Id,
+                    instance.Symbol,
+                    Status = StrategyStatus.Paused.ToString(),
+                    message = "The square-off order failed at the broker — kill was NOT completed. Check the order log for details, then retry Kill (or Resume to keep trading with the position still open)."
+                });
+            }
+
+            await _instanceRepository.UpdateStatusAsync(instance.Id, StrategyStatus.Killed, ct);
+            _logger.LogWarning("Strategy instance #{Id} ({Symbol}) KILLED via API — position squared off", instance.Id, instance.Symbol);
             return Ok(new
             {
                 instance.Id,

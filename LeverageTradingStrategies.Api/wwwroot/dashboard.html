@@ -169,7 +169,8 @@ async function loadStatus() {
   const btnResume = document.getElementById('btnResume');
   const btnKill = document.getElementById('btnKill');
   btnPause.disabled = status === 'Paused' || status === 'Killed';
-  btnResume.disabled = status === 'Running' || status === 'Killed';
+  // Resume works from Killed too -- Kill is a strong stop, not a one-way door.
+  btnResume.disabled = status === 'Running';
   btnKill.disabled = status === 'Killed';
 
   document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
@@ -217,15 +218,47 @@ async function doAction(action) {
   await refresh();
 }
 
-function confirmKill() {
-  if (!confirm('KILL SWITCH: this will PERMANENTLY stop the strategy instance and immediately square off any open position. This cannot be undone (a new instance would be needed to trade this symbol again). Continue?')) return;
-  fetch('/api/tqqq-weekly/kill', { method: 'POST' })
-    .then(r => r.json().then(body => ({ ok: r.ok, body })))
-    .then(({ ok, body }) => {
-      if (!ok) alert('Kill failed: ' + (body.message || 'unknown error'));
-      else alert('Kill switch executed: ' + (body.squareOff ? `${body.squareOff.action} ${body.squareOff.quantity} — ${body.squareOff.reason}` : 'no position to square off'));
-      refresh();
-    });
+async function confirmKill() {
+  const btnKill = document.getElementById('btnKill');
+  btnKill.disabled = true;
+  let preview;
+  try {
+    const res = await fetch('/api/tqqq-weekly/kill-preview');
+    preview = await res.json();
+    if (!res.ok) {
+      alert('Could not check the broker before killing: ' + (preview.message || res.status) + '\n\nAborting -- try again.');
+      return;
+    }
+  } catch (e) {
+    alert('Could not reach the server to preview the kill. Aborting.');
+    return;
+  } finally {
+    btnKill.disabled = false;
+  }
+
+  const qty = preview.brokerQuantity ?? 0;
+  const promptText = qty > 0
+    ? `KILL SWITCH\n\nBroker confirms ${qty} share(s) of ${preview.symbol} open` +
+      (preview.brokerAveragePrice ? ` @ avg ${Number(preview.brokerAveragePrice).toFixed(2)}` : '') +
+      (preview.currentPrice ? ` (current ${Number(preview.currentPrice).toFixed(2)})` : '') +
+      `.\n\nThis will sell all ${qty} share(s) at market and stop new entries until Resumed.\n\nContinue?`
+    : `KILL SWITCH\n\nBroker confirms no open position for ${preview.symbol} -- this will just stop new entries (nothing to sell).\n\nContinue?`;
+
+  if (!confirm(promptText)) return;
+
+  try {
+    const res = await fetch('/api/tqqq-weekly/kill', { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert('Kill did NOT complete: ' + (body.message || res.status) + '\n\nThe instance was left Paused (not Killed) so nothing is stranded -- you can retry Kill or Resume.');
+    } else {
+      alert('Kill switch executed: ' + (body.squareOff && body.squareOff.action !== 'None'
+        ? `${body.squareOff.action} ${body.squareOff.quantity} -- ${body.squareOff.reason}`
+        : 'no position to square off'));
+    }
+  } finally {
+    refresh();
+  }
 }
 
 refresh();

@@ -302,14 +302,26 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             }
         }
 
-        public TqqqWeeklyDecision EvaluateKillSwitch(TqqqWeeklyState state, decimal currentPrice)
+        public TqqqWeeklyDecision EvaluateKillSwitch(TqqqWeeklyState state, decimal currentPrice, int? brokerConfirmedQuantity = null)
         {
-            if (!state.Holding)
-                return TqqqWeeklyDecision.None("Kill switch: already flat, nothing to square off");
+            int qty = brokerConfirmedQuantity ?? state.Quantity;
+            bool quantityMismatch = brokerConfirmedQuantity.HasValue && state.Holding && brokerConfirmedQuantity.Value != state.Quantity;
 
-            decimal estimatedPnl = (state.Quantity * currentPrice) - state.TotalCostBasis;
-            var decision = TqqqWeeklyDecision.SellAll(state.Quantity,
-                $"KILL SWITCH: manual square-off at ~{currentPrice:C} (entry {state.EntryPrice:C})",
+            if (qty <= 0)
+            {
+                bool hadLocalState = state.Holding;
+                ClearPositionState(state);
+                return TqqqWeeklyDecision.None(hadLocalState
+                    ? "Kill switch: broker confirms flat (local state disagreed and was reconciled to flat) — nothing to square off"
+                    : "Kill switch: already flat, nothing to square off");
+            }
+
+            decimal estimatedPnl = (qty * currentPrice) - state.TotalCostBasis;
+            string mismatchNote = quantityMismatch
+                ? $" [broker-confirmed qty {qty} differs from local state qty {state.Quantity} — using broker figure; RealizedPnL is approximate]"
+                : string.Empty;
+            var decision = TqqqWeeklyDecision.SellAll(qty,
+                $"KILL SWITCH: manual square-off at ~{currentPrice:C} (entry {state.EntryPrice:C}){mismatchNote}",
                 estimatedPnl);
             ClearPositionState(state);
             return decision;

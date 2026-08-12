@@ -58,9 +58,12 @@ dotnet build
   - `Jobs/TqqqWeeklyLiveTradingJob.cs` — the Quartz job that ticks during market hours and
     drives the strategy. Gates every tick on the strategy instance's Status: skips entirely
     when Killed, skips new entries only when Paused (an existing position keeps being managed).
-  - `Controllers/TqqqWeeklyController.cs` — `GET status` / `GET orders` / `POST pause` /
-    `POST resume` / `POST kill` (immediate, synchronous square-off — does not wait for the
-    next Quartz tick).
+  - `Controllers/TqqqWeeklyController.cs` — `GET status` / `GET orders` / `GET config` /
+    `POST config` / `POST pause` / `POST resume` / `GET kill-preview` / `POST kill`. Kill is
+    immediate and synchronous (does not wait for the next Quartz tick), confirms the current
+    position against the broker (not just local state) before touching anything, and only
+    marks the instance Killed after the square-off is confirmed — see "Kill switch safety"
+    below.
   - `wwwroot/dashboard.html` — single-file monitoring dashboard (status, position, config,
     recent orders, Pause/Resume/Kill buttons). Open `/dashboard.html` once the app is running.
   - `Program.cs` — DI/Quartz/Serilog/SQLite wiring; runs `DatabaseInitializer.EnsureCreated()`
@@ -101,10 +104,18 @@ dotnet build
    `appsettings.json` only **seed** the `StrategyInstances` row the first time it's ever
    created — after that, change them via the DB/controller, not by editing config and
    restarting (see `IStrategyInstanceRepository` remarks).
-7. Kill is permanent for a given strategy instance (by design, per the "square off and halt"
-   requirement) — there's no "un-kill." To trade the symbol again, that means starting a fresh
-   instance (a new DB row); this wasn't built as a self-service endpoint since it's meant to be
-   a deliberate, rare action.
+7. **Kill switch safety.** Kill is a strong stop, not a one-way door — `POST resume` works
+   from a Killed instance too, so a kill attempt never permanently strands you. The flow:
+   - The dashboard calls `GET kill-preview` first, which asks the broker (not local state)
+     what's actually open, and shows that to you before you confirm.
+   - `POST kill` pauses the instance immediately (blocks new entries, and is the safe
+     fallback if anything below fails), then asks the broker for the real position. If the
+     broker can't be reached, or there's an open position but no quote to price it, or the
+     sell order itself fails at the broker — the instance is left **Paused**, not Killed, and
+     the response says so. Nothing is marked Killed until the square-off is actually confirmed
+     (or the broker confirms there was nothing to square off in the first place).
+   - Every real square-off still goes through the same `IStrategyOrderExecutor` the live job
+     uses, so it lands in `StrategyOrders` with the same shape as any other exit.
 
 ## Repo housekeeping
 
