@@ -60,6 +60,8 @@ builder.Services.AddSingleton<ISqliteConnectionFactory>(_ => new SqliteConnectio
 builder.Services.AddSingleton<DatabaseInitializer>();
 builder.Services.AddScoped<IStrategyInstanceRepository, SqliteStrategyInstanceRepository>();
 builder.Services.AddScoped<IStrategyOrderRepository, SqliteStrategyOrderRepository>();
+builder.Services.AddScoped<IStrategyConfigRepository, SqliteStrategyConfigRepository>();
+builder.Services.AddScoped<ITqqqWeeklyConfigProvider, TqqqWeeklyConfigProvider>();
 // Scoped (not Singleton): depends on IBroker, which is Scoped when UseSimulatedBroker=false
 // (SchwabBroker) — a Singleton here would be a captive-dependency error in that configuration.
 builder.Services.AddScoped<IStrategyOrderExecutor, StrategyOrderExecutor>();

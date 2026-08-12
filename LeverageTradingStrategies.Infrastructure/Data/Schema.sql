@@ -67,3 +67,18 @@ CREATE TABLE IF NOT EXISTS StrategyOrders (
 
 CREATE INDEX IF NOT EXISTS IX_StrategyOrders_StrategyInstanceId_SubmittedUtc
     ON StrategyOrders (StrategyInstanceId, SubmittedUtc DESC);
+
+-- Generic per-instance tuning-parameter store (key/value). Same pattern MarketMatrixPreparer
+-- already uses for its AppConfig table -- adding a new tunable never needs a schema change.
+-- Seeded once per instance from appsettings.json defaults (AppSettingsOptions.TqqqWeekly) the
+-- first time TqqqWeeklyConfigProvider.GetAsync runs for that instance (INSERT OR IGNORE, so it
+-- never clobbers a value already tuned here); after that, this table is the source of truth --
+-- edit a row and it takes effect on the very next job tick, no app restart required. Works for
+-- any future strategy type too (StrategyInstanceId is the only strategy-specific link).
+CREATE TABLE IF NOT EXISTS StrategyConfig (
+    StrategyInstanceId INTEGER NOT NULL REFERENCES StrategyInstances(Id),
+    Key TEXT NOT NULL,
+    Value TEXT NOT NULL,
+    UpdatedUtc TEXT NOT NULL,
+    PRIMARY KEY (StrategyInstanceId, Key)
+);

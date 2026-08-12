@@ -26,6 +26,8 @@ namespace LeverageTradingStrategies.Api.Controllers
         private readonly IStrategyInstanceRepository _instanceRepository;
         private readonly IStrategyOrderRepository _orderRepository;
         private readonly IStrategyOrderExecutor _orderExecutor;
+        private readonly IStrategyConfigRepository _configRepository;
+        private readonly ITqqqWeeklyConfigProvider _configProvider;
         private readonly IQuoteProvider _quoteProvider;
         private readonly IOptions<AppSettingsOptions> _options;
         private readonly ILogger<TqqqWeeklyController> _logger;
@@ -36,6 +38,8 @@ namespace LeverageTradingStrategies.Api.Controllers
             IStrategyInstanceRepository instanceRepository,
             IStrategyOrderRepository orderRepository,
             IStrategyOrderExecutor orderExecutor,
+            IStrategyConfigRepository configRepository,
+            ITqqqWeeklyConfigProvider configProvider,
             IQuoteProvider quoteProvider,
             IOptions<AppSettingsOptions> options,
             ILogger<TqqqWeeklyController> logger)
@@ -45,6 +49,8 @@ namespace LeverageTradingStrategies.Api.Controllers
             _instanceRepository = instanceRepository;
             _orderRepository = orderRepository;
             _orderExecutor = orderExecutor;
+            _configRepository = configRepository;
+            _configProvider = configProvider;
             _quoteProvider = quoteProvider;
             _options = options;
             _logger = logger;
@@ -56,6 +62,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             var tqqq = _options.Value.TqqqWeekly;
             var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
             var state = await _stateStore.GetOrCreateAsync(instance.Id, tqqq.Symbol, ct);
+            var runtimeConfig = await _configProvider.GetAsync(instance.Id, ct);
             return Ok(new
             {
                 config = new
@@ -63,11 +70,11 @@ namespace LeverageTradingStrategies.Api.Controllers
                     tqqq.Enabled,
                     tqqq.Symbol,
                     tqqq.CronSchedule,
-                    tqqq.ForceCloseWeekly,
-                    tqqq.CloseStopPct,
-                    tqqq.EntryDayCloseStopPct,
                     useSimulatedBroker = _options.Value.Trading.UseSimulatedBroker
                 },
+                // DB-backed (StrategyConfig table) tuning parameters -- source of truth after
+                // the instance's first-ever tick, NOT what's currently in appsettings.json.
+                runtimeConfig,
                 instance = new
                 {
                     instance.Id,
@@ -82,6 +89,46 @@ namespace LeverageTradingStrategies.Api.Controllers
                 },
                 state
             });
+        }
+
+        /// <summary>Current DB-backed tuning parameters for this instance (seeded from
+        /// appsettings.json on first run, editable after that via POST config).</summary>
+        [HttpGet("config")]
+        public async Task<IActionResult> GetConfig(CancellationToken ct)
+        {
+            var tqqq = _options.Value.TqqqWeekly;
+            var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
+            var runtimeConfig = await _configProvider.GetAsync(instance.Id, ct);
+            return Ok(runtimeConfig);
+        }
+
+        /// <summary>Sets a single tuning parameter in the StrategyConfig DB table. Takes
+        /// effect on the live job's very next tick -- no app restart. Value is passed as a
+        /// plain string (e.g. "-0.20", "true", "14") and parsed the same way the config
+        /// provider parses it when resolving the runtime config.</summary>
+        [HttpPost("config")]
+        public async Task<IActionResult> SetConfig([FromBody] SetTqqqWeeklyConfigRequest request, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(request.Key) || !TqqqWeeklyConfigProvider.KnownKeys.Contains(request.Key))
+            {
+                return BadRequest(new
+                {
+                    message = $"Unknown config key '{request.Key}'.",
+                    knownKeys = TqqqWeeklyConfigProvider.KnownKeys
+                });
+            }
+            if (request.Value is null)
+            {
+                return BadRequest(new { message = "Value is required." });
+            }
+
+            var tqqq = _options.Value.TqqqWeekly;
+            var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
+            await _configRepository.SetAsync(instance.Id, request.Key, request.Value, ct);
+            _logger.LogWarning("Strategy instance #{Id} ({Symbol}) config changed via API: {Key} = {Value}", instance.Id, instance.Symbol, request.Key, request.Value);
+
+            var runtimeConfig = await _configProvider.GetAsync(instance.Id, ct);
+            return Ok(runtimeConfig);
         }
 
         [HttpGet("orders")]
@@ -173,4 +220,8 @@ namespace LeverageTradingStrategies.Api.Controllers
             });
         }
     }
+
+    /// <summary>Value is a plain string, parsed the same way TqqqWeeklyConfigProvider parses
+    /// every other config value (e.g. "-0.20" for a decimal, "true"/"false" for a bool).</summary>
+    public record SetTqqqWeeklyConfigRequest(string Key, string? Value);
 }

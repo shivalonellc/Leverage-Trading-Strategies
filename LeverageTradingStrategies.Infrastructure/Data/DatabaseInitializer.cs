@@ -81,6 +81,14 @@ namespace LeverageTradingStrategies.Infrastructure.Data
 
             CREATE INDEX IF NOT EXISTS IX_StrategyOrders_StrategyInstanceId_SubmittedUtc
                 ON StrategyOrders (StrategyInstanceId, SubmittedUtc DESC);
+
+            CREATE TABLE IF NOT EXISTS StrategyConfig (
+                StrategyInstanceId INTEGER NOT NULL REFERENCES StrategyInstances(Id),
+                Key TEXT NOT NULL,
+                Value TEXT NOT NULL,
+                UpdatedUtc TEXT NOT NULL,
+                PRIMARY KEY (StrategyInstanceId, Key)
+            );
             """;
 
         public void EnsureCreated()

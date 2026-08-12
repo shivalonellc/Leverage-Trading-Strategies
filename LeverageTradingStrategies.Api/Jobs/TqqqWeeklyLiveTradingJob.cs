@@ -41,6 +41,7 @@ namespace LeverageTradingStrategies.Api.Jobs
         private readonly ITqqqWeeklyStateStore _stateStore;
         private readonly IStrategyInstanceRepository _instanceRepository;
         private readonly IStrategyOrderExecutor _orderExecutor;
+        private readonly ITqqqWeeklyConfigProvider _configProvider;
         private readonly IOptions<AppSettingsOptions> _options;
         private readonly ILogger<TqqqWeeklyLiveTradingJob> _logger;
 
@@ -51,6 +52,7 @@ namespace LeverageTradingStrategies.Api.Jobs
             ITqqqWeeklyStateStore stateStore,
             IStrategyInstanceRepository instanceRepository,
             IStrategyOrderExecutor orderExecutor,
+            ITqqqWeeklyConfigProvider configProvider,
             IOptions<AppSettingsOptions> options,
             ILogger<TqqqWeeklyLiveTradingJob> logger)
         {
@@ -60,6 +62,7 @@ namespace LeverageTradingStrategies.Api.Jobs
             _stateStore = stateStore;
             _instanceRepository = instanceRepository;
             _orderExecutor = orderExecutor;
+            _configProvider = configProvider;
             _options = options;
             _logger = logger;
         }
@@ -121,6 +124,10 @@ namespace LeverageTradingStrategies.Api.Jobs
             var accountNumber = settings.Trading.AccountNumber;
             var isSimulated = settings.Trading.UseSimulatedBroker;
             var state = await _stateStore.GetOrCreateAsync(instance.Id, tqqq.Symbol, ct);
+            // Resolved fresh every tick from the StrategyConfig DB table (seeded from
+            // appsettings on first run) -- so a tuning change made directly in the DB takes
+            // effect on the very next tick, no app restart required.
+            var config = await _configProvider.GetAsync(instance.Id, ct);
 
             // Holiday calendar limitation: these two flags approximate "day before last
             // trading day of the week" / "last trading day of the week" as plain
@@ -143,7 +150,7 @@ namespace LeverageTradingStrategies.Api.Jobs
             {
                 await _orderExecutor.ExecuteAsync(
                     instance,
-                    _strategy.EvaluateSessionOpen(state, tradingDate, quote.OpenPrice, instance.CurrentCapital),
+                    _strategy.EvaluateSessionOpen(config, state, tradingDate, quote.OpenPrice, instance.CurrentCapital),
                     quote.OpenPrice, accountNumber, isSimulated, ct);
             }
 
@@ -152,11 +159,11 @@ namespace LeverageTradingStrategies.Api.Jobs
                 _strategy.EvaluateIntradayTakeProfit(state, quote.HighPrice),
                 quote.HighPrice, accountNumber, isSimulated, ct);
 
-            if (nowEastern.Hour >= tqqq.ForceCloseHourEt)
+            if (nowEastern.Hour >= config.ForceCloseHourEt)
             {
                 await _orderExecutor.ExecuteAsync(
                     instance,
-                    _strategy.EvaluateForceCloseWeekly(state, tradingDate, isDayBeforeLastTradingDayOfWeek, quote.LastPrice),
+                    _strategy.EvaluateForceCloseWeekly(config, state, tradingDate, isDayBeforeLastTradingDayOfWeek, quote.LastPrice),
                     quote.LastPrice, accountNumber, isSimulated, ct);
             }
 
@@ -164,10 +171,10 @@ namespace LeverageTradingStrategies.Api.Jobs
             {
                 await _orderExecutor.ExecuteAsync(
                     instance,
-                    _strategy.EvaluateSessionClose(state, tradingDate, isLastTradingDayOfWeek, quote.LastPrice),
+                    _strategy.EvaluateSessionClose(config, state, tradingDate, isLastTradingDayOfWeek, quote.LastPrice),
                     quote.LastPrice, accountNumber, isSimulated, ct);
 
-                _strategy.RollDailyVolatilityHistory(state, tradingDate, quote.LastPrice);
+                _strategy.RollDailyVolatilityHistory(config, state, tradingDate, quote.LastPrice);
             }
 
             await _stateStore.SaveAsync(instance.Id, state, ct);

@@ -157,9 +157,13 @@ async function loadStatus() {
 
   document.getElementById('cfgSymbol').textContent = data.config.symbol ?? data.config.Symbol;
   document.getElementById('cfgEnabled').textContent = (data.config.enabled ?? data.config.Enabled) ? 'Yes' : 'No';
-  document.getElementById('cfgCloseStop').textContent = fmtPct(data.config.closeStopPct ?? data.config.CloseStopPct);
-  document.getElementById('cfgEntryDayStop').textContent = fmtPct(data.config.entryDayCloseStopPct ?? data.config.EntryDayCloseStopPct);
   document.getElementById('cfgCron').textContent = data.config.cronSchedule ?? data.config.CronSchedule;
+
+  // DB-backed (StrategyConfig table) tuning parameters -- source of truth after the
+  // instance's first-ever tick, editable via POST /api/tqqq-weekly/config.
+  const rc = data.runtimeConfig ?? {};
+  document.getElementById('cfgCloseStop').textContent = fmtPct(rc.closeStopPct ?? rc.CloseStopPct);
+  document.getElementById('cfgEntryDayStop').textContent = fmtPct(rc.entryDayCloseStopPct ?? rc.EntryDayCloseStopPct);
 
   const btnPause = document.getElementById('btnPause');
   const btnResume = document.getElementById('btnResume');

@@ -47,6 +47,13 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
         /// always resets back to AllocatedCapital (fixed-size trading regardless of P&L).</summary>
         public bool CompoundingEnabled { get; set; } = false;
 
+        // --- Every field below this point (through ForceCloseHourEt) is a SEED DEFAULT only.
+        // TqqqWeeklyConfigProvider copies these into the StrategyConfig DB table the first
+        // time each strategy instance ever resolves its config, and the DB row is the source
+        // of truth after that -- editing these values and restarting has NO effect on an
+        // already-running instance. Edit StrategyConfig directly (or a future admin endpoint)
+        // to retune a live instance; it takes effect on the very next job tick. ---
+
         // --- Entry sizing (Section 2 / 6 of the spec) ---
         public decimal BaseSizeFraction { get; set; } = 0.98m;
         public decimal VolBoostFraction { get; set; } = 1.25m;

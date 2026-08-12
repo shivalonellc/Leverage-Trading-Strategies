@@ -1,7 +1,6 @@
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace LeverageTradingStrategies.Domain.Tqqq
 {
@@ -9,6 +8,12 @@ namespace LeverageTradingStrategies.Domain.Tqqq
     /// C# port of the verified TQQQ weekly strategy baseline (fleury_tqqq_weekly_replication.py
     /// + the force-close-weekly and Monday-avg-down-bounce additions). Field/parameter names
     /// and comments below reference the corresponding section of TQQQ_Weekly_Strategy_Spec_v1.md.
+    ///
+    /// Stateless w.r.t. tuning parameters: every method that needs one takes a
+    /// TqqqWeeklyRuntimeConfig argument (resolved per-tick by the caller from the StrategyConfig
+    /// DB table via ITqqqWeeklyConfigProvider) rather than reading from IOptions at construction
+    /// time -- this is what lets a config value tuned directly in the DB take effect on the very
+    /// next tick without an app restart.
     ///
     /// IMPORTANT — one known open item versus the Python backtest: the Python replication
     /// faithfully preserves a source quirk where ANY buy fill (including an avg-down add)
@@ -21,12 +26,10 @@ namespace LeverageTradingStrategies.Domain.Tqqq
     /// </summary>
     public class TqqqWeeklyStrategyService : ITqqqWeeklyStrategyService
     {
-        private readonly TqqqWeeklyOptions _options;
         private readonly ILogger<TqqqWeeklyStrategyService> _logger;
 
-        public TqqqWeeklyStrategyService(IOptions<AppSettingsOptions> options, ILogger<TqqqWeeklyStrategyService> logger)
+        public TqqqWeeklyStrategyService(ILogger<TqqqWeeklyStrategyService> logger)
         {
-            _options = options.Value.TqqqWeekly;
             _logger = logger;
         }
 
@@ -34,7 +37,7 @@ namespace LeverageTradingStrategies.Domain.Tqqq
         /// (StrategyInstanceRecord.CurrentCapital) — NOT total account/broker equity. All
         /// sizing math (entry qty, avg-down qty) is a fraction of this, so more than one
         /// strategy can safely share a single brokerage account.</param>
-        public TqqqWeeklyDecision EvaluateSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital)
+        public TqqqWeeklyDecision EvaluateSessionOpen(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital)
         {
             if (state.LastSessionOpenDate == tradingDate)
                 return TqqqWeeklyDecision.None("Session-open already evaluated for this trading date");
@@ -49,11 +52,11 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             }
 
             return state.Holding
-                ? EvaluateHoldingOnSessionOpen(state, sessionOpenPrice, deployedCapital)
-                : EvaluateEntryOnSessionOpen(state, tradingDate, sessionOpenPrice, deployedCapital, isNewWeek);
+                ? EvaluateHoldingOnSessionOpen(config, state, sessionOpenPrice, deployedCapital)
+                : EvaluateEntryOnSessionOpen(config, state, tradingDate, sessionOpenPrice, deployedCapital, isNewWeek);
         }
 
-        private TqqqWeeklyDecision EvaluateHoldingOnSessionOpen(TqqqWeeklyState state, decimal sessionOpenPrice, decimal deployedCapital)
+        private TqqqWeeklyDecision EvaluateHoldingOnSessionOpen(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, decimal sessionOpenPrice, decimal deployedCapital)
         {
             if (state.RecentDailyCloses.Count == 0)
             {
@@ -72,13 +75,13 @@ namespace LeverageTradingStrategies.Domain.Tqqq
                 ? (yesterdayClose - entryPriceAtStartOfDay) / entryPriceAtStartOfDay
                 : 0m;
 
-            decimal effectiveTrigger = _options.AvgDownTrigger;
-            decimal effectiveFraction = _options.AvgDownFraction;
+            decimal effectiveTrigger = config.AvgDownTrigger;
+            decimal effectiveFraction = config.AvgDownFraction;
             bool isMondaySpecialWindow = state.EnteredOnMonday && !state.MondayAvgDownWindowConsumed;
             if (isMondaySpecialWindow)
             {
-                effectiveTrigger = _options.MondayAvgDownTrigger;
-                effectiveFraction = _options.MondayAvgDownFraction;
+                effectiveTrigger = config.MondayAvgDownTrigger;
+                effectiveFraction = config.MondayAvgDownFraction;
             }
 
             var decision = TqqqWeeklyDecision.None("Holding — no avg-down trigger hit");
@@ -109,15 +112,15 @@ namespace LeverageTradingStrategies.Domain.Tqqq
 
             // step 5c: tiered take-profit target, off the (possibly just-reset) entry price
             decimal tierMultiplier =
-                profit > _options.TierProfitHighThreshold ? _options.TierHighMultiplier :
-                profit > 0m ? _options.TierMidMultiplier :
-                _options.TierLowMultiplier;
+                profit > config.TierProfitHighThreshold ? config.TierHighMultiplier :
+                profit > 0m ? config.TierMidMultiplier :
+                config.TierLowMultiplier;
             state.CurrentTargetPrice = state.EntryPrice * tierMultiplier;
 
             return decision;
         }
 
-        private TqqqWeeklyDecision EvaluateEntryOnSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital, bool isNewWeek)
+        private TqqqWeeklyDecision EvaluateEntryOnSessionOpen(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital, bool isNewWeek)
         {
             // One-time deploy guard: if this strategy instance has never run before, only
             // auto-start on an actual Monday so the very first cycle isn't a truncated,
@@ -138,7 +141,7 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             if (!isFirstTradingDayOfWeek || state.TradedThisWeek)
                 return TqqqWeeklyDecision.None("Flat, but not the weekly entry day (or already traded this week)");
 
-            decimal frac = state.VolGateClosedToday ? _options.VolBoostFraction : _options.BaseSizeFraction;
+            decimal frac = state.VolGateClosedToday ? config.VolBoostFraction : config.BaseSizeFraction;
             int qty = (int)Math.Floor(deployedCapital * frac / sessionOpenPrice);
             if (qty <= 0)
             {
@@ -182,9 +185,9 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             return TqqqWeeklyDecision.None("Take-profit target not yet touched");
         }
 
-        public TqqqWeeklyDecision EvaluateForceCloseWeekly(TqqqWeeklyState state, DateOnly tradingDate, bool isDayBeforeLastTradingDayOfWeek, decimal currentPrice)
+        public TqqqWeeklyDecision EvaluateForceCloseWeekly(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, DateOnly tradingDate, bool isDayBeforeLastTradingDayOfWeek, decimal currentPrice)
         {
-            if (!_options.ForceCloseWeekly)
+            if (!config.ForceCloseWeekly)
                 return TqqqWeeklyDecision.None("Force-close-weekly disabled in config");
 
             if (!isDayBeforeLastTradingDayOfWeek)
@@ -205,7 +208,7 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             return decision;
         }
 
-        public TqqqWeeklyDecision EvaluateSessionClose(TqqqWeeklyState state, DateOnly tradingDate, bool isLastTradingDayOfWeek, decimal closePrice)
+        public TqqqWeeklyDecision EvaluateSessionClose(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, DateOnly tradingDate, bool isLastTradingDayOfWeek, decimal closePrice)
         {
             if (state.LastSessionCloseDate == tradingDate)
                 return TqqqWeeklyDecision.None("Session-close already evaluated for this trading date");
@@ -224,7 +227,7 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             // (defaults to the same -20%, but can be tuned independently).
             if (state.EntryPrice != 0)
             {
-                decimal stopThreshold = isEntryDay ? _options.EntryDayCloseStopPct : _options.CloseStopPct;
+                decimal stopThreshold = isEntryDay ? config.EntryDayCloseStopPct : config.CloseStopPct;
                 decimal closeProfit = (closePrice - state.EntryPrice) / state.EntryPrice;
                 if (closeProfit <= stopThreshold)
                 {
@@ -255,24 +258,24 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             return TqqqWeeklyDecision.None("Session-close checks passed, still holding");
         }
 
-        public void RollDailyVolatilityHistory(TqqqWeeklyState state, DateOnly tradingDate, decimal todaysClose)
+        public void RollDailyVolatilityHistory(TqqqWeeklyRuntimeConfig config, TqqqWeeklyState state, DateOnly tradingDate, decimal todaysClose)
         {
             if (state.LastVolRollDate == tradingDate)
                 return;
             state.LastVolRollDate = tradingDate;
 
             state.RecentDailyCloses.Add(todaysClose);
-            int maxCloses = _options.VolLookbackDays + 1;
+            int maxCloses = config.VolLookbackDays + 1;
             while (state.RecentDailyCloses.Count > maxCloses)
                 state.RecentDailyCloses.RemoveAt(0);
 
-            if (state.RecentDailyCloses.Count < _options.VolLookbackDays + 1)
+            if (state.RecentDailyCloses.Count < config.VolLookbackDays + 1)
             {
                 state.VolGateClosedToday = false;
                 return;
             }
 
-            var rets = new List<double>(_options.VolLookbackDays);
+            var rets = new List<double>(config.VolLookbackDays);
             for (int i = 1; i < state.RecentDailyCloses.Count; i++)
             {
                 decimal prev = state.RecentDailyCloses[i - 1];
@@ -283,13 +286,13 @@ namespace LeverageTradingStrategies.Domain.Tqqq
 
             double v = PopulationStdDev(rets);
             state.VolHistory.Add(v);
-            while (state.VolHistory.Count > _options.VolHistoryMaxReadings)
+            while (state.VolHistory.Count > config.VolHistoryMaxReadings)
                 state.VolHistory.RemoveAt(0);
 
-            if (state.VolHistory.Count >= _options.VolHistoryMinReadings)
+            if (state.VolHistory.Count >= config.VolHistoryMinReadings)
             {
                 var sorted = state.VolHistory.OrderBy(x => x).ToList();
-                int idx = (int)(_options.VolPercentileThreshold * (sorted.Count - 1));
+                int idx = (int)(config.VolPercentileThreshold * (sorted.Count - 1));
                 double threshold = sorted[idx];
                 state.VolGateClosedToday = v >= threshold;
             }
