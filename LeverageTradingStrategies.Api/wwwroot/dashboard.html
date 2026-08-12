@@ -203,7 +203,7 @@
         <div class="ticker-price" id="vsTickerPrice">—</div>
         <div class="ticker-change" id="vsTickerChange"></div>
         <span class="ticker-badge">Delayed</span>
-        <button class="ticker-refresh" onclick="loadTicker()" title="Refresh quote">&#8635;</button>
+        <button class="ticker-refresh" onclick="loadTicker(true)" title="Refresh quote">&#8635;</button>
         <div class="form-field" style="margin-left:auto"><label>Right</label>
           <select id="vsRight" onchange="onRightChange()">
             <option value="Put">Put (Bull Put Credit)</option>
@@ -463,21 +463,44 @@ let activeLeg = 'short';
 let vsRangeFraction = 0.25;
 let dtRangeFraction = 0.25;
 
-async function loadTicker() {
+// ---- Small client-side cache: expirations/chain/quote lookups are re-hit constantly while
+// building a spread (switching Put/Call, dragging strikes, re-opening the same expiration) --
+// caching them avoids redundant round-trips and keeps the ruler/drag interaction responsive.
+// TTL keeps things reasonably fresh (bid/ask and spot do move); the ticker's refresh button
+// bypasses the quote cache explicitly.
+const CACHE_TTL_MS = 15000;
+const _cache = { expirations: new Map(), chain: new Map(), quote: new Map() };
+function cacheGet(store, key) {
+  const e = _cache[store].get(key);
+  if (e && (Date.now() - e.t) < CACHE_TTL_MS) return e.v;
+  return null;
+}
+function cacheSet(store, key, v) { _cache[store].set(key, { v, t: Date.now() }); }
+
+function applyTicker(q) {
+  currentSpot = q.lastPrice;
+  document.getElementById('vsTickerPrice').textContent = '$' + Number(q.lastPrice).toFixed(2);
+  const chg = q.change ?? 0, pct = q.changePercent ?? 0;
+  const cls = chg >= 0 ? 'green' : 'red';
+  const sign = chg >= 0 ? '+' : '';
+  const el = document.getElementById('vsTickerChange');
+  el.className = 'ticker-change ' + cls;
+  el.textContent = `${sign}${(pct * 100).toFixed(2)}% ${sign}$${Math.abs(chg).toFixed(2)}`;
+}
+
+async function loadTicker(force) {
   const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
   if (!symbol) return;
+  if (!force) {
+    const cached = cacheGet('quote', symbol);
+    if (cached) { applyTicker(cached); return; }
+  }
   try {
     const res = await fetch('/api/vertical-spread/quote?symbol=' + encodeURIComponent(symbol));
     const q = await res.json();
     if (!res.ok) { document.getElementById('vsTickerPrice').textContent = '—'; return; }
-    currentSpot = q.lastPrice;
-    document.getElementById('vsTickerPrice').textContent = '$' + Number(q.lastPrice).toFixed(2);
-    const chg = q.change ?? 0, pct = q.changePercent ?? 0;
-    const cls = chg >= 0 ? 'green' : 'red';
-    const sign = chg >= 0 ? '+' : '';
-    const el = document.getElementById('vsTickerChange');
-    el.className = 'ticker-change ' + cls;
-    el.textContent = `${sign}${(pct*100).toFixed(2)}% ${sign}$${Math.abs(chg).toFixed(2)}`;
+    cacheSet('quote', symbol, q);
+    applyTicker(q);
   } catch (e) { /* quote is a nice-to-have, don't block the builder on it */ }
 }
 
@@ -503,6 +526,17 @@ async function loadExpirations() {
   if (!symbol) return;
   const monthsDiv = document.getElementById('vsExpMonths');
   const daysDiv = document.getElementById('vsExpDays');
+
+  const cached = cacheGet('expirations', symbol);
+  if (cached) {
+    currentExpirations = cached;
+    const first = currentExpirations[0];
+    selectedExpKey = first.date.substring(0, 7);
+    renderExpMonths();
+    selectExpiration(first.date);
+    return;
+  }
+
   monthsDiv.innerHTML = '<span class="muted">Loading…</span>';
   daysDiv.innerHTML = '';
   try {
@@ -510,6 +544,7 @@ async function loadExpirations() {
     const exps = await res.json();
     if (!res.ok || !exps.length) { monthsDiv.innerHTML = '<span class="muted">No expirations</span>'; return; }
     currentExpirations = exps.map(e => ({ date: e.expirationDate.substring(0, 10), dte: e.daysToExpiration, dow: e.dayOfWeek }));
+    cacheSet('expirations', symbol, currentExpirations);
     const first = currentExpirations[0];
     selectedExpKey = first.date.substring(0, 7);
     renderExpMonths();
@@ -573,19 +608,31 @@ async function loadChainHint() {
   const right = document.getElementById('vsRight').value;
   const hint = document.getElementById('vsChainHint');
   if (!exp) return;
-  hint.textContent = 'Loading chain…';
-  try {
-    const res = await fetch(`/api/vertical-spread/chain?symbol=${encodeURIComponent(symbol)}&expiration=${exp}`);
-    const chain = await res.json();
-    const opts = (chain.options || []).filter(o => o.right === right).sort((a, b) => a.strike - b.strike);
-    currentChainOptions = opts;
-    if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; document.getElementById('vsStrikeRuler').innerHTML = ''; return; }
-    hint.textContent = `${opts.length} strikes available — click A or B, then click the ruler to set that leg's strike.`;
-    if (!document.getElementById('vsShortStrike').value) autoPickDefaultStrikes(opts, right);
-    onStrikeInputChange();
-  } catch (e) {
-    hint.textContent = 'Could not load chain.';
+
+  // Chain is cached per symbol+expiration (not per right) -- the /chain endpoint already
+  // returns both calls and puts together, so switching Put/Call for the same expiration is
+  // served entirely from cache with no network round-trip.
+  const cacheKey = symbol + '|' + exp;
+  let chain = cacheGet('chain', cacheKey);
+  if (!chain) {
+    hint.textContent = 'Loading chain…';
+    try {
+      const res = await fetch(`/api/vertical-spread/chain?symbol=${encodeURIComponent(symbol)}&expiration=${exp}`);
+      chain = await res.json();
+      if (!res.ok) { hint.textContent = 'Could not load chain.'; return; }
+      cacheSet('chain', cacheKey, chain);
+    } catch (e) {
+      hint.textContent = 'Could not load chain.';
+      return;
+    }
   }
+
+  const opts = (chain.options || []).filter(o => o.right === right).sort((a, b) => a.strike - b.strike);
+  currentChainOptions = opts;
+  if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; document.getElementById('vsStrikeRuler').innerHTML = ''; return; }
+  hint.textContent = `${opts.length} strikes available — drag A or B on the ruler (or click A/B, then click the ruler).`;
+  if (!document.getElementById('vsShortStrike').value) autoPickDefaultStrikes(opts, right);
+  onStrikeInputChange();
 }
 
 function renderStrikeRulerFromChain() {
@@ -599,11 +646,15 @@ function renderStrikeRulerFromChain() {
   });
 }
 
-function onStrikeInputChange() {
+// commit=false is used while actively dragging a strike handle: it re-renders the ruler
+// locally (cheap, no network) on every mousemove, and only fires the /preview network call
+// once, on mouseup (commit=true) -- see onRulerMouseMove/onRulerMouseUp below. This is both
+// what makes dragging feel responsive and what keeps the server from being hit per-pixel.
+function onStrikeInputChange(commit) {
   document.getElementById('legShortVal').textContent = document.getElementById('vsShortStrike').value || '—';
   document.getElementById('legLongVal').textContent = document.getElementById('vsLongStrike').value || '—';
   renderStrikeRulerFromChain();
-  previewSpread();
+  if (commit !== false) previewSpread();
 }
 
 function currentBuildRequest() {
@@ -837,8 +888,15 @@ function buildStatItems(d) {
 }
 
 // ---- Strike-picker ruler: a horizontal number line of available strikes with A/B pill
-// badges for the short/long legs and a triangle marker at the current spot -- click the
-// ruler to set whichever leg (A/B toggle above) is active to the nearest real strike. ----
+// badges for the short/long legs and a triangle marker at the current spot. The A/B pills are
+// real drag handles (mousedown on a pill, drag, release) -- grabbing a pill directly always
+// moves that leg, so it doesn't matter which A/B toggle button was last clicked. Clicking (or
+// starting a drag) on empty ruler track still moves whichever leg is currently toggled active,
+// as a fallback. rulerLayout is stashed so the document-level drag handlers (defined below)
+// can convert a mouse position to a strike without needing the ruler to be re-rendered.
+
+let rulerLayout = null;
+let rulerDragLeg = null;
 
 function renderStrikeRuler(containerId, cfg) {
   const el = document.getElementById(containerId);
@@ -850,6 +908,7 @@ function renderStrikeRuler(containerId, cfg) {
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const span = (xMax - xMin) || 1;
   const xScale = x => padL + (x - xMin) / span * (w - padL - padR);
+  rulerLayout = { w, padL, padR, xMin, span, strikes };
 
   let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;cursor:pointer">`;
   svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="2"/>`;
@@ -868,32 +927,70 @@ function renderStrikeRuler(containerId, cfg) {
     svg += `<polygon points="${(sx - 5).toFixed(1)},${midY - 16} ${(sx + 5).toFixed(1)},${midY - 16} ${sx.toFixed(1)},${midY - 6}" fill="#e6e8ec"/>`;
     svg += `<text x="${sx.toFixed(1)}" y="${midY - 20}" fill="#e6e8ec" font-size="9" text-anchor="middle">${cfg.symbol || ''}</text>`;
   }
-  const pill = (strike, label, color, above) => {
+  const pill = (strike, label, color, above, leg) => {
     if (strike == null || isNaN(strike)) return '';
     const x = xScale(strike);
     const y = above ? midY - 30 : midY + 30;
-    return `<line x1="${x.toFixed(1)}" y1="${(above ? y + 9 : midY + 5).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(above ? midY - 5 : y - 9).toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="2,2"/>` +
+    return `<g data-leg="${leg}" style="cursor:grab">` +
+      `<line x1="${x.toFixed(1)}" y1="${(above ? y + 9 : midY + 5).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(above ? midY - 5 : y - 9).toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="2,2"/>` +
       `<rect x="${(x - 22).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="44" height="18" rx="9" fill="${color}"/>` +
-      `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>`;
+      `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>` +
+      `</g>`;
   };
   const suffix = cfg.right === 'Call' ? 'C' : 'P';
-  svg += pill(cfg.shortStrike, `A ${cfg.shortStrike ?? ''}${suffix}`, '#e0a93f', true);
-  svg += pill(cfg.longStrike, `B ${cfg.longStrike ?? ''}${suffix}`, '#4f8ef7', false);
+  svg += pill(cfg.shortStrike, `A ${cfg.shortStrike ?? ''}${suffix}`, '#e0a93f', true, 'short');
+  svg += pill(cfg.longStrike, `B ${cfg.longStrike ?? ''}${suffix}`, '#4f8ef7', false, 'long');
   svg += `</svg>`;
   el.innerHTML = svg;
 
   const svgEl = document.getElementById(containerId + '-svg');
-  svgEl.addEventListener('click', (ev) => {
-    const rect = svgEl.getBoundingClientRect();
-    const px = (ev.clientX - rect.left) / rect.width * w;
-    const priceAtCursor = xMin + (px - padL) / (w - padL - padR) * span;
-    let nearest = strikes[0], nd = Infinity;
-    for (const s of strikes) { const d = Math.abs(s - priceAtCursor); if (d < nd) { nd = d; nearest = s; } }
-    const targetInput = activeLeg === 'short' ? 'vsShortStrike' : 'vsLongStrike';
-    document.getElementById(targetInput).value = nearest;
-    onStrikeInputChange();
-  });
+  svgEl.addEventListener('mousedown', onRulerMouseDown);
 }
+
+function rulerNearestStrike(ev, svgEl) {
+  if (!rulerLayout) return null;
+  const rect = svgEl.getBoundingClientRect();
+  const px = (ev.clientX - rect.left) / rect.width * rulerLayout.w;
+  const priceAtCursor = rulerLayout.xMin + (px - rulerLayout.padL) / (rulerLayout.w - rulerLayout.padL - rulerLayout.padR) * rulerLayout.span;
+  let nearest = rulerLayout.strikes[0], nd = Infinity;
+  for (const s of rulerLayout.strikes) { const d = Math.abs(s - priceAtCursor); if (d < nd) { nd = d; nearest = s; } }
+  return nearest;
+}
+
+function applyRulerPosition(ev, svgEl, commit) {
+  const nearest = rulerNearestStrike(ev, svgEl);
+  if (nearest == null) return;
+  const targetInput = rulerDragLeg === 'short' ? 'vsShortStrike' : 'vsLongStrike';
+  const input = document.getElementById(targetInput);
+  if (parseFloat(input.value) === nearest) return; // no change -- skip the re-render
+  input.value = nearest;
+  onStrikeInputChange(commit);
+}
+
+// Grabbing a pill (data-leg on the <g>) always drags that leg; mousedown on empty track falls
+// back to whichever leg the A/B toggle buttons currently have active.
+function onRulerMouseDown(ev) {
+  const svgEl = ev.currentTarget;
+  const handle = ev.target.closest && ev.target.closest('[data-leg]');
+  const leg = handle ? handle.getAttribute('data-leg') : activeLeg;
+  setActiveLeg(leg);
+  rulerDragLeg = leg;
+  applyRulerPosition(ev, svgEl, false);
+  ev.preventDefault();
+}
+
+// Attached once at load (not per-render) so the drag continues smoothly even while the ruler
+// itself is being re-rendered on every intermediate step.
+document.addEventListener('mousemove', (ev) => {
+  if (!rulerDragLeg) return;
+  const svgEl = document.getElementById('vsStrikeRuler-svg');
+  if (svgEl) applyRulerPosition(ev, svgEl, false);
+});
+document.addEventListener('mouseup', () => {
+  if (!rulerDragLeg) return;
+  rulerDragLeg = null;
+  previewSpread(); // commit: exactly one network call, at drag end
+});
 
 // ---- Lightweight inline-SVG payoff chart (no external chart library) ----
 // Visual language modeled on the OptionStrat strategy builder: a vertical gradient fill that's
