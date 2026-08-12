@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+logs/
+*.log
+appsettings.Development.json
+appsettings.Local.json

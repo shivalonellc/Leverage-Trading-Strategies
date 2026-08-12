@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="LeverageTradingStrategies.Domain/LeverageTradingStrategies.Domain.csproj" />
+  <Project Path="LeverageTradingStrategies.Infrastructure/LeverageTradingStrategies.Infrastructure.csproj" />
+  <Project Path="LeverageTradingStrategies.Api/LeverageTradingStrategies.Api.csproj" />
+  <Project Path="SchwabApiCS/SchwabApiCS.csproj" />
+</Solution>
