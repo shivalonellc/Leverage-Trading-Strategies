@@ -93,6 +93,9 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
         public Task<string> PlaceStopLossOrderAsync(string accountNumber, string symbol, int quantity, decimal stopPrice, CancellationToken ct = default)
             => Task.FromResult(OrderResult(symbol, quantity)); // accepted, not simulated further — the strategy checks its own close-based stop instead of relying on a resting broker stop order
 
+        public Task<string> PlaceTakeProfitOrderAsync(string accountNumber, string symbol, int quantity, decimal limitPrice, CancellationToken ct = default)
+            => Task.FromResult(OrderResult(symbol, quantity)); // accepted, not simulated further — mirrors PlaceStopLossOrderAsync above
+
         public Task<string> PlaceShortSellMarketOrderAsync(string accountNumber, string symbol, int quantity, CancellationToken ct = default)
             => throw new NotSupportedException("SimulatedBroker: TQQQ weekly strategy is long-only, short-selling is not exercised in dry-run mode.");
 

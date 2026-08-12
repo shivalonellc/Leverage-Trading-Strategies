@@ -488,6 +488,53 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
                 symLock.Release();
             }
         }
+        /// <summary>
+        /// Submits a limit SELL order at an explicit target price (GTC) to close an existing
+        /// long position — the take-profit counterpart to PlaceStopLossOrderAsync. Unlike
+        /// PlaceSellLimitOrderAsync, the limit price is caller-supplied, not pegged to mark.
+        /// </summary>
+        public async Task<string> PlaceTakeProfitOrderAsync(string accountNumber, string symbol, int quantity, decimal limitPrice, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(symbol) || quantity <= 0 || limitPrice <= 0 || string.IsNullOrWhiteSpace(accountNumber))
+                return JsonSerializer.Serialize(new { error = "Invalid parameter payloads sent to execution core" });
+
+            symbol = symbol.Trim().ToUpperInvariant();
+            var symLock = GetSymbolLock(symbol);
+            await symLock.WaitAsync(ct);
+
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var _schwabApi = scope.ServiceProvider.GetRequiredService<SchwabApi>();
+                var pquote = await _schwabApi.GetQuoteAsync(symbol);
+                if (pquote?.Data == null)
+                    return JsonSerializer.Serialize(new { error = $"Could not verify asset metrics for {symbol}" });
+
+                var assetType = Order.GetAssetType(pquote.Data.assetMainType);
+
+                var result = await _schwabApi.OrderSingleAsync(
+                    accountNumber,
+                    symbol,
+                    assetType,
+                    Order.OrderType.LIMIT,
+                    Order.Session.SEAMLESS,
+                    Order.Duration.GOOD_TILL_CANCEL,
+                    Order.Position.TO_CLOSE,
+                    quantity,
+                    price: limitPrice
+                );
+
+                if (result?.Data == null)
+                    return JsonSerializer.Serialize(new { status = "failed", message = result?.Message ?? "Null structural response from Schwab routing engine" });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = result.Data.Value.ToString(), symbol = symbol, quantity = quantity, limitPrice = limitPrice });
+            }
+            finally
+            {
+                symLock.Release();
+            }
+        }
+
         public async Task<string> GetEquityMarketStatus()
         {
             using var scope = _serviceScopeFactory.CreateScope();

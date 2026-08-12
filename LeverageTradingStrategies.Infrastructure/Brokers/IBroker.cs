@@ -23,6 +23,12 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
         Task<string> PlaceSellLimitOrderAsync(string accountNumber, string symbol, int quantity, CancellationToken ct = default);
         Task<string> PlaceStopLossOrderAsync(string accountNumber, string symbol, int quantity, decimal stopPrice, CancellationToken ct = default);
 
+        /// <summary>Submits a limit SELL order at an explicit target price to close an
+        /// existing long position if/when it fills — the take-profit counterpart to
+        /// PlaceStopLossOrderAsync's explicit stopPrice. NOT pegged to the current mark price
+        /// (unlike PlaceSellLimitOrderAsync above, which always uses the live quote's mark).</summary>
+        Task<string> PlaceTakeProfitOrderAsync(string accountNumber, string symbol, int quantity, decimal limitPrice, CancellationToken ct = default);
+
         /// <summary>Opens a short position (TO_OPEN with a negative quantity under the hood —
         /// see SchwabBroker remarks). Needed for symbols traded directly both directions
         /// (e.g. SPY mapped to itself for both Up and Down) rather than via a leveraged

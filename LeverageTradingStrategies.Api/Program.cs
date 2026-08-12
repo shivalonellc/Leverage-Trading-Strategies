@@ -40,18 +40,25 @@ if (!string.IsNullOrWhiteSpace(schwabTokenPath))
     builder.Services.AddScoped(_ => new SchwabApi(schwabTokenPath));
 }
 
+// Both concrete broker implementations are ALWAYS registered, regardless of
+// UseSimulatedBroker below -- BrokerTestController deliberately targets either one
+// per-request via its own "live" flag, independent of what the live trading job
+// defaults to. Single shared SimulatedBroker instance so IBroker/IQuoteProvider (when
+// resolved to it) and the test controller see the same in-memory state.
+builder.Services.AddSingleton<SimulatedBroker>();
+builder.Services.AddScoped<SchwabBroker>();
+builder.Services.AddScoped<SchwabQuoteProvider>();
+
 var useSimulatedBroker = builder.Configuration.GetValue<bool>("AppSettings:Trading:UseSimulatedBroker");
 if (useSimulatedBroker)
 {
-    // Single shared instance so IBroker and IQuoteProvider see the same in-memory state.
-    builder.Services.AddSingleton<SimulatedBroker>();
     builder.Services.AddSingleton<IBroker>(sp => sp.GetRequiredService<SimulatedBroker>());
     builder.Services.AddSingleton<IQuoteProvider>(sp => sp.GetRequiredService<SimulatedBroker>());
 }
 else
 {
-    builder.Services.AddScoped<IBroker, SchwabBroker>();
-    builder.Services.AddScoped<IQuoteProvider, SchwabQuoteProvider>();
+    builder.Services.AddScoped<IBroker>(sp => sp.GetRequiredService<SchwabBroker>());
+    builder.Services.AddScoped<IQuoteProvider>(sp => sp.GetRequiredService<SchwabQuoteProvider>());
 }
 
 // --- SQLite persistence (strategy instances, per-strategy state, order audit trail) ---

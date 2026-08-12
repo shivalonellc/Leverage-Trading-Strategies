@@ -66,6 +66,11 @@ dotnet build
     below.
   - `wwwroot/dashboard.html` — single-file monitoring dashboard (status, position, config,
     recent orders, Pause/Resume/Kill buttons). Open `/dashboard.html` once the app is running.
+  - `Controllers/BrokerTestController.cs` — diagnostic endpoints for exercising the broker
+    plumbing directly, outside any strategy: `GET account`, `POST order/market`,
+    `POST order/stop-loss`, `POST order/take-profit`, `POST order/close`. Every order
+    endpoint takes `?live=true|false` (default false = SimulatedBroker, no real order) and
+    always uses quantity 1 — see "Broker test endpoints" below.
   - `Program.cs` — DI/Quartz/Serilog/SQLite wiring; runs `DatabaseInitializer.EnsureCreated()`
     on startup.
 - `SchwabApiCS/` — copied wholesale from MarketMatrixPreparer (the Schwab REST/order client).
@@ -116,6 +121,32 @@ dotnet build
      (or the broker confirms there was nothing to square off in the first place).
    - Every real square-off still goes through the same `IStrategyOrderExecutor` the live job
      uses, so it lands in `StrategyOrders` with the same shape as any other exit.
+
+## Broker test endpoints
+
+`BrokerTestController` (`/api/broker-test/*`) exists to verify the Schwab wiring works
+end-to-end BEFORE trusting it inside a strategy — it bypasses `StrategyInstances`/
+`StrategyOrders`/config entirely and talks straight to `IBroker`. Every order endpoint:
+- Takes `?live=true|false` (default `false`). `false` always routes to `SimulatedBroker`
+  — no real order, regardless of `AppSettings:Trading:UseSimulatedBroker`. `true` routes to
+  the real `SchwabBroker` against `AppSettings:Trading:AccountNumber` — **this places a
+  real order with real money.** Every call is logged at Warning level either way.
+- Uses quantity **1**, always — not a parameter, so a `live=true` call can never
+  accidentally size up.
+
+```
+GET  /api/broker-test/account?live=false&symbol=TQQQ
+POST /api/broker-test/order/market?symbol=TQQQ&live=false
+POST /api/broker-test/order/stop-loss?symbol=TQQQ&live=false&stopPercent=5      (or &stopPrice=123.45)
+POST /api/broker-test/order/take-profit?symbol=TQQQ&live=false&profitPercent=5 (or &limitPrice=123.45)
+POST /api/broker-test/order/close?symbol=TQQQ&live=false
+```
+
+`symbol` defaults to `AppSettings:TqqqWeekly:Symbol` if omitted. `stopPrice`/`limitPrice`
+default to `stopPercent`/`profitPercent` off the current quote (5% by default) if not
+supplied explicitly. A natural test sequence: `account` → `order/market` → `order/stop-loss`
+→ `order/take-profit` → `order/close`, first with `live=false` to confirm the shapes, then
+once with `live=true` (1 share) to confirm it actually reaches Schwab.
 
 ## Repo housekeeping
 
