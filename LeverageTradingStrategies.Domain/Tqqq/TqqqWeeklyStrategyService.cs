@@ -30,7 +30,11 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             _logger = logger;
         }
 
-        public TqqqWeeklyDecision EvaluateSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal portfolioValue)
+        /// <param name="deployedCapital">This strategy instance's current capital allocation
+        /// (StrategyInstanceRecord.CurrentCapital) — NOT total account/broker equity. All
+        /// sizing math (entry qty, avg-down qty) is a fraction of this, so more than one
+        /// strategy can safely share a single brokerage account.</param>
+        public TqqqWeeklyDecision EvaluateSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital)
         {
             if (state.LastSessionOpenDate == tradingDate)
                 return TqqqWeeklyDecision.None("Session-open already evaluated for this trading date");
@@ -45,11 +49,11 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             }
 
             return state.Holding
-                ? EvaluateHoldingOnSessionOpen(state, sessionOpenPrice, portfolioValue)
-                : EvaluateEntryOnSessionOpen(state, tradingDate, sessionOpenPrice, portfolioValue, isNewWeek);
+                ? EvaluateHoldingOnSessionOpen(state, sessionOpenPrice, deployedCapital)
+                : EvaluateEntryOnSessionOpen(state, tradingDate, sessionOpenPrice, deployedCapital, isNewWeek);
         }
 
-        private TqqqWeeklyDecision EvaluateHoldingOnSessionOpen(TqqqWeeklyState state, decimal sessionOpenPrice, decimal portfolioValue)
+        private TqqqWeeklyDecision EvaluateHoldingOnSessionOpen(TqqqWeeklyState state, decimal sessionOpenPrice, decimal deployedCapital)
         {
             if (state.RecentDailyCloses.Count == 0)
             {
@@ -82,11 +86,12 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             // step 5b: avg-down check (may reset state.EntryPrice to today's fill price)
             if (!state.AddedThisPosition && profit <= effectiveTrigger)
             {
-                int addQty = (int)Math.Floor(portfolioValue * effectiveFraction / yesterdayClose);
+                int addQty = (int)Math.Floor(deployedCapital * effectiveFraction / yesterdayClose);
                 if (addQty > 0)
                 {
                     state.AddedThisPosition = true;
                     state.Quantity += addQty;
+                    state.TotalCostBasis += addQty * sessionOpenPrice; // true cost basis, independent of the EntryPrice reset below
                     state.EntryPrice = sessionOpenPrice; // faithful replication quirk — see class remarks
                     decision = TqqqWeeklyDecision.AddToPosition(addQty,
                         $"Avg-down trigger hit: profit {profit:P2} <= {effectiveTrigger:P2} " +
@@ -112,7 +117,7 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             return decision;
         }
 
-        private TqqqWeeklyDecision EvaluateEntryOnSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal portfolioValue, bool isNewWeek)
+        private TqqqWeeklyDecision EvaluateEntryOnSessionOpen(TqqqWeeklyState state, DateOnly tradingDate, decimal sessionOpenPrice, decimal deployedCapital, bool isNewWeek)
         {
             // One-time deploy guard: if this strategy instance has never run before, only
             // auto-start on an actual Monday so the very first cycle isn't a truncated,
@@ -134,16 +139,17 @@ namespace LeverageTradingStrategies.Domain.Tqqq
                 return TqqqWeeklyDecision.None("Flat, but not the weekly entry day (or already traded this week)");
 
             decimal frac = state.VolGateClosedToday ? _options.VolBoostFraction : _options.BaseSizeFraction;
-            int qty = (int)Math.Floor(portfolioValue * frac / sessionOpenPrice);
+            int qty = (int)Math.Floor(deployedCapital * frac / sessionOpenPrice);
             if (qty <= 0)
             {
-                _logger.LogWarning("Weekly entry day but computed size rounded to 0 shares (portfolioValue={PortfolioValue}, price={Price})", portfolioValue, sessionOpenPrice);
+                _logger.LogWarning("Weekly entry day but computed size rounded to 0 shares (deployedCapital={DeployedCapital}, price={Price})", deployedCapital, sessionOpenPrice);
                 return TqqqWeeklyDecision.None("Flat, weekly entry day, but computed size rounds to 0 shares");
             }
 
             state.Holding = true;
             state.EntryPrice = sessionOpenPrice;
             state.Quantity = qty;
+            state.TotalCostBasis = qty * sessionOpenPrice;
             state.EntryDate = tradingDate;
             state.EnteredOnMonday = tradingDate.DayOfWeek == DayOfWeek.Monday;
             state.AddedThisPosition = false;
@@ -165,8 +171,10 @@ namespace LeverageTradingStrategies.Domain.Tqqq
 
             if (currentHigh >= state.CurrentTargetPrice)
             {
+                decimal estimatedPnl = (state.Quantity * state.CurrentTargetPrice) - state.TotalCostBasis;
                 var decision = TqqqWeeklyDecision.SellAll(state.Quantity,
-                    $"Take-profit touched: high {currentHigh:C} >= target {state.CurrentTargetPrice:C} (entry {state.EntryPrice:C})");
+                    $"Take-profit touched: high {currentHigh:C} >= target {state.CurrentTargetPrice:C} (entry {state.EntryPrice:C})",
+                    estimatedPnl);
                 ClearPositionState(state);
                 return decision;
             }
@@ -189,8 +197,10 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             if (!state.Holding)
                 return TqqqWeeklyDecision.None("Force-close day, but flat");
 
+            decimal estimatedPnl = (state.Quantity * currentPrice) - state.TotalCostBasis;
             var decision = TqqqWeeklyDecision.SellAll(state.Quantity,
-                $"Force-close-weekly: unconditional exit on day-before-last-trading-day (entry {state.EntryPrice:C}, current {currentPrice:C})");
+                $"Force-close-weekly: unconditional exit on day-before-last-trading-day (entry {state.EntryPrice:C}, current {currentPrice:C})",
+                estimatedPnl);
             ClearPositionState(state);
             return decision;
         }
@@ -206,14 +216,23 @@ namespace LeverageTradingStrategies.Domain.Tqqq
 
             bool isEntryDay = state.EntryDate == tradingDate;
 
-            // Close-based -20% stop — skipped on the entry day (entry-day blind spot, Section 3)
-            if (!isEntryDay && state.EntryPrice != 0)
+            // Close-based stop. On any day AFTER entry this uses the standard CloseStopPct
+            // (matches the verified backtest exactly). On the ENTRY DAY, the verified backtest
+            // has NO stop check at all (the "entry-day blind spot") — this branch is a
+            // deliberate, NEW departure from that baseline, added at the user's request for
+            // live risk management, using a separately configurable EntryDayCloseStopPct
+            // (defaults to the same -20%, but can be tuned independently).
+            if (state.EntryPrice != 0)
             {
+                decimal stopThreshold = isEntryDay ? _options.EntryDayCloseStopPct : _options.CloseStopPct;
                 decimal closeProfit = (closePrice - state.EntryPrice) / state.EntryPrice;
-                if (closeProfit <= _options.CloseStopPct)
+                if (closeProfit <= stopThreshold)
                 {
+                    decimal estimatedPnl = (state.Quantity * closePrice) - state.TotalCostBasis;
                     var stopDecision = TqqqWeeklyDecision.SellAll(state.Quantity,
-                        $"Close-based stop: close {closePrice:C} is {closeProfit:P2} vs entry {state.EntryPrice:C} (<= {_options.CloseStopPct:P0})");
+                        $"{(isEntryDay ? "Entry-day close-based stop (NEW, not part of verified backtest)" : "Close-based stop")}: " +
+                        $"close {closePrice:C} is {closeProfit:P2} vs entry {state.EntryPrice:C} (<= {stopThreshold:P0})",
+                        estimatedPnl);
                     ClearPositionState(state);
                     return stopDecision;
                 }
@@ -225,8 +244,10 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             {
                 _logger.LogWarning("EOW backstop fired — still holding {Symbol} on the last trading day of the week. " +
                     "Force-close-weekly should have already closed this on the prior day; investigate.", state.Symbol);
+                decimal backstopPnl = (state.Quantity * closePrice) - state.TotalCostBasis;
                 var backstop = TqqqWeeklyDecision.SellAll(state.Quantity,
-                    "EOW backstop: still holding on the last trading day of the week (unexpected — force-close should have already fired)");
+                    "EOW backstop: still holding on the last trading day of the week (unexpected — force-close should have already fired)",
+                    backstopPnl);
                 ClearPositionState(state);
                 return backstop;
             }
@@ -278,11 +299,25 @@ namespace LeverageTradingStrategies.Domain.Tqqq
             }
         }
 
+        public TqqqWeeklyDecision EvaluateKillSwitch(TqqqWeeklyState state, decimal currentPrice)
+        {
+            if (!state.Holding)
+                return TqqqWeeklyDecision.None("Kill switch: already flat, nothing to square off");
+
+            decimal estimatedPnl = (state.Quantity * currentPrice) - state.TotalCostBasis;
+            var decision = TqqqWeeklyDecision.SellAll(state.Quantity,
+                $"KILL SWITCH: manual square-off at ~{currentPrice:C} (entry {state.EntryPrice:C})",
+                estimatedPnl);
+            ClearPositionState(state);
+            return decision;
+        }
+
         private static void ClearPositionState(TqqqWeeklyState state)
         {
             state.Holding = false;
             state.EntryPrice = 0m;
             state.Quantity = 0;
+            state.TotalCostBasis = 0m;
             state.EntryDate = null;
             state.EnteredOnMonday = false;
             state.AddedThisPosition = false;

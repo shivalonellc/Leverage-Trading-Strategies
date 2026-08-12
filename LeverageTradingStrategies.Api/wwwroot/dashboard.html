@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TQQQ Weekly — Strategy Monitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38; --text: #e6e8ec; --muted: #8b93a1;
+    --green: #35c98f; --red: #e5566d; --amber: #e0a93f; --blue: #4f8ef7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .wrap { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .card .value { font-size: 22px; font-weight: 600; }
+  .value.green { color: var(--green); } .value.red { color: var(--red); } .value.amber { color: var(--amber); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.Running { background: rgba(53,201,143,.15); color: var(--green); }
+  .badge.Paused { background: rgba(224,169,63,.15); color: var(--amber); }
+  .badge.Killed { background: rgba(229,86,109,.15); color: var(--red); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .side-Buy { color: var(--green); } .side-Sell { color: var(--red); }
+  .status-Filled { color: var(--green); } .status-Failed { color: var(--red); } .status-Submitted { color: var(--amber); }
+  .controls { display: flex; gap: 10px; }
+  button { border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  #btnPause { background: rgba(224,169,63,.15); color: var(--amber); }
+  #btnResume { background: rgba(79,142,247,.15); color: var(--blue); }
+  #btnKill { background: rgba(229,86,109,.15); color: var(--red); }
+  button:hover { filter: brightness(1.2); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .muted { color: var(--muted); }
+  .reason { color: var(--muted); font-size: 12px; max-width: 380px; }
+  .sim-tag { display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(79,142,247,.15); color: var(--blue); }
+  .err { color: var(--red); padding: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>TQQQ Weekly Strategy <span id="simTag"></span></h1>
+    <div class="sub" id="lastUpdated">loading…</div>
+  </div>
+  <div class="controls">
+    <button id="btnPause" onclick="doAction('pause')">Pause</button>
+    <button id="btnResume" onclick="doAction('resume')">Resume</button>
+    <button id="btnKill" onclick="confirmKill()">Kill (Square Off)</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="errorBox"></div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Status</div>
+      <div class="value"><span id="statusBadge" class="badge">…</span></div>
+    </div>
+    <div class="card">
+      <div class="label">Current Capital</div>
+      <div class="value" id="currentCapital">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Allocated Capital</div>
+      <div class="value" id="allocatedCapital">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Compounding</div>
+      <div class="value" id="compounding">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Position</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Holding</div><div class="value" id="holding">—</div></div>
+      <div class="card"><div class="label">Quantity</div><div class="value" id="quantity">—</div></div>
+      <div class="card"><div class="label">Entry Price</div><div class="value" id="entryPrice">—</div></div>
+      <div class="card"><div class="label">Cost Basis</div><div class="value" id="costBasis">—</div></div>
+      <div class="card"><div class="label">Take-Profit Target</div><div class="value" id="targetPrice">—</div></div>
+      <div class="card"><div class="label">Entry Date</div><div class="value" id="entryDate">—</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Config</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Symbol</div><div class="value" id="cfgSymbol">—</div></div>
+      <div class="card"><div class="label">Enabled</div><div class="value" id="cfgEnabled">—</div></div>
+      <div class="card"><div class="label">Close Stop</div><div class="value" id="cfgCloseStop">—</div></div>
+      <div class="card"><div class="label">Entry-Day Close Stop</div><div class="value" id="cfgEntryDayStop">—</div></div>
+      <div class="card"><div class="label">Cron</div><div class="value" style="font-size:14px" id="cfgCron">—</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Recent Orders</h2>
+    <table>
+      <thead>
+        <tr><th>Submitted (UTC)</th><th>Action</th><th>Side</th><th>Qty</th><th>Status</th><th>Fill Price</th><th>Realized P&amp;L</th><th>Reason</th></tr>
+      </thead>
+      <tbody id="ordersBody">
+        <tr><td colspan="8" class="muted">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const REFRESH_MS = 15000;
+
+function fmtMoney(v) {
+  if (v === null || v === undefined) return '—';
+  return '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  return (Number(v) * 100).toFixed(1) + '%';
+}
+
+async function loadStatus() {
+  const res = await fetch('/api/tqqq-weekly/status');
+  if (!res.ok) throw new Error('status ' + res.status);
+  const data = await res.json();
+
+  document.getElementById('simTag').innerHTML = data.config.useSimulatedBroker
+    ? '<span class="sim-tag">DRY RUN</span>' : '<span class="sim-tag" style="background:rgba(229,86,109,.15);color:var(--red)">LIVE</span>';
+
+  const status = data.instance.status ?? data.instance.Status;
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = status;
+  badge.className = 'badge ' + status;
+
+  document.getElementById('currentCapital').textContent = fmtMoney(data.instance.currentCapital ?? data.instance.CurrentCapital);
+  document.getElementById('allocatedCapital').textContent = fmtMoney(data.instance.allocatedCapital ?? data.instance.AllocatedCapital);
+  document.getElementById('compounding').textContent = (data.instance.compoundingEnabled ?? data.instance.CompoundingEnabled) ? 'On' : 'Off';
+
+  const s = data.state;
+  document.getElementById('holding').textContent = s.holding ?? s.Holding ? 'Yes' : 'No';
+  const holdingVal = s.holding ?? s.Holding;
+  document.getElementById('holding').className = 'value ' + (holdingVal ? 'green' : '');
+  document.getElementById('quantity').textContent = s.quantity ?? s.Quantity ?? 0;
+  document.getElementById('entryPrice').textContent = fmtMoney(s.entryPrice ?? s.EntryPrice);
+  document.getElementById('costBasis').textContent = fmtMoney(s.totalCostBasis ?? s.TotalCostBasis);
+  document.getElementById('targetPrice').textContent = fmtMoney(s.currentTargetPrice ?? s.CurrentTargetPrice);
+  document.getElementById('entryDate').textContent = s.entryDate ?? s.EntryDate ?? '—';
+
+  document.getElementById('cfgSymbol').textContent = data.config.symbol ?? data.config.Symbol;
+  document.getElementById('cfgEnabled').textContent = (data.config.enabled ?? data.config.Enabled) ? 'Yes' : 'No';
+  document.getElementById('cfgCloseStop').textContent = fmtPct(data.config.closeStopPct ?? data.config.CloseStopPct);
+  document.getElementById('cfgEntryDayStop').textContent = fmtPct(data.config.entryDayCloseStopPct ?? data.config.EntryDayCloseStopPct);
+  document.getElementById('cfgCron').textContent = data.config.cronSchedule ?? data.config.CronSchedule;
+
+  const btnPause = document.getElementById('btnPause');
+  const btnResume = document.getElementById('btnResume');
+  const btnKill = document.getElementById('btnKill');
+  btnPause.disabled = status === 'Paused' || status === 'Killed';
+  btnResume.disabled = status === 'Running' || status === 'Killed';
+  btnKill.disabled = status === 'Killed';
+
+  document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
+}
+
+async function loadOrders() {
+  const res = await fetch('/api/tqqq-weekly/orders?limit=50');
+  if (!res.ok) throw new Error('orders ' + res.status);
+  const orders = await res.json();
+  const body = document.getElementById('ordersBody');
+  if (!orders.length) {
+    body.innerHTML = '<tr><td colspan="8" class="muted">No orders yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = orders.map(o => {
+    const side = o.side ?? o.Side;
+    const status = o.status ?? o.Status;
+    return `<tr>
+      <td>${new Date(o.submittedUtc ?? o.SubmittedUtc).toLocaleString()}</td>
+      <td>${o.actionType ?? o.ActionType}</td>
+      <td class="side-${side}">${side}</td>
+      <td>${o.quantity ?? o.Quantity}</td>
+      <td class="status-${status}">${status}</td>
+      <td>${fmtMoney(o.fillPrice ?? o.FillPrice)}</td>
+      <td>${fmtMoney(o.realizedPnL ?? o.RealizedPnL)}</td>
+      <td class="reason">${o.reason ?? o.Reason ?? ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function refresh() {
+  try {
+    await Promise.all([loadStatus(), loadOrders()]);
+    document.getElementById('errorBox').innerHTML = '';
+  } catch (e) {
+    document.getElementById('errorBox').innerHTML = `<div class="err">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function doAction(action) {
+  if (!confirm(`Are you sure you want to ${action} the strategy?`)) return;
+  const res = await fetch(`/api/tqqq-weekly/${action}`, { method: 'POST' });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) alert('Failed: ' + (body.message || res.status));
+  await refresh();
+}
+
+function confirmKill() {
+  if (!confirm('KILL SWITCH: this will PERMANENTLY stop the strategy instance and immediately square off any open position. This cannot be undone (a new instance would be needed to trade this symbol again). Continue?')) return;
+  fetch('/api/tqqq-weekly/kill', { method: 'POST' })
+    .then(r => r.json().then(body => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) alert('Kill failed: ' + (body.message || 'unknown error'));
+      else alert('Kill switch executed: ' + (body.squareOff ? `${body.squareOff.action} ${body.squareOff.quantity} — ${body.squareOff.reason}` : 'no position to square off'));
+      refresh();
+    });
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

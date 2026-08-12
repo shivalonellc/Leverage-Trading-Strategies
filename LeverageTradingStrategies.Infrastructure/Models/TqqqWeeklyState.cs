@@ -14,6 +14,14 @@ namespace LeverageTradingStrategies.Infrastructure.Models
         public bool Holding { get; set; }
         public decimal EntryPrice { get; set; }
         public int Quantity { get; set; }
+
+        /// <summary>True weighted cost basis (sum of $ spent across entry + any avg-down
+        /// adds), tracked SEPARATELY from EntryPrice because EntryPrice gets reset to the
+        /// latest fill price on an avg-down (a faithfully-replicated backtest quirk — see
+        /// TqqqWeeklyStrategyService remarks) and is therefore NOT a reliable cost basis for
+        /// computing real P&L. Used to compute RealizedPnL on exit for capital compounding.</summary>
+        public decimal TotalCostBasis { get; set; }
+
         public DateOnly? EntryDate { get; set; }
         public bool EnteredOnMonday { get; set; }
         public bool AddedThisPosition { get; set; }

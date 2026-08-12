@@ -11,6 +11,12 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <!-- Raw ADO.NET (Microsoft.Data.Sqlite), not EF Core: deliberately avoids EF's
+         migration tooling (dotnet-ef) and LINQ-to-SQL translation surface, both of which
+         are harder to hand-verify without a local compiler/SDK available. Schema is a plain
+         hand-written SQL script (Data/Schema.sql), same convention MarketMatrixPreparer
+         already uses for its own schema changes. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>

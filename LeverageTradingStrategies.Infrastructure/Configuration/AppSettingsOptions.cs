@@ -32,6 +32,21 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
 
         public string Symbol { get; set; } = "TQQQ";
 
+        // --- Capital allocation / compounding ---
+        // Only used to SEED the StrategyInstances row the first time this instance ever
+        // runs. After that, the DB row (AllocatedCapital/CompoundingEnabled/CurrentCapital)
+        // is the source of truth — change it via the controller endpoints, not by editing
+        // these and restarting (see IStrategyInstanceRepository remarks).
+        /// <summary>Dollar amount this strategy instance is allowed to deploy. All sizing
+        /// math (entry qty, avg-down qty) is a fraction of this, NOT of total account equity
+        /// — lets more than one strategy share a single brokerage account safely.</summary>
+        public decimal AllocatedCapital { get; set; } = 10000m;
+
+        /// <summary>If true, realized P&L from each closed trade rolls into CurrentCapital,
+        /// so next week's sizing reflects compounded gains/losses. If false, CurrentCapital
+        /// always resets back to AllocatedCapital (fixed-size trading regardless of P&L).</summary>
+        public bool CompoundingEnabled { get; set; } = false;
+
         // --- Entry sizing (Section 2 / 6 of the spec) ---
         public decimal BaseSizeFraction { get; set; } = 0.98m;
         public decimal VolBoostFraction { get; set; } = 1.25m;
@@ -56,6 +71,14 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
 
         // --- Close-based stop (Section 7.3) ---
         public decimal CloseStopPct { get; set; } = -0.20m;
+
+        /// <summary>NEW vs. the backtested baseline: a close-based stop-loss that ALSO
+        /// applies on the entry day itself (the verified backtest deliberately has no stop
+        /// check at all on the entry day — the "entry-day blind spot" — this adds one back
+        /// for live risk management, at the user's request). Checked only at that day's
+        /// close, same mechanism as the existing non-entry-day stop, just a separately
+        /// configurable threshold so the two can be tuned independently later.</summary>
+        public decimal EntryDayCloseStopPct { get; set; } = -0.20m;
 
         // --- Force-close-weekly (Section 7.2) ---
         public bool ForceCloseWeekly { get; set; } = true;

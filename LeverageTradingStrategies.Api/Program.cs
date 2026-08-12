@@ -1,7 +1,9 @@
 using LeverageTradingStrategies.Api.Jobs;
+using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
 using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
+using LeverageTradingStrategies.Infrastructure.Data;
 using LeverageTradingStrategies.Infrastructure.Quotes;
 using LeverageTradingStrategies.Infrastructure.State;
 using Quartz;
@@ -52,8 +54,18 @@ else
     builder.Services.AddScoped<IQuoteProvider, SchwabQuoteProvider>();
 }
 
+// --- SQLite persistence (strategy instances, per-strategy state, order audit trail) ---
+var sqliteConnectionString = builder.Configuration["ConnectionStrings:SqliteDb"] ?? "Data Source=leverage-trading.db";
+builder.Services.AddSingleton<ISqliteConnectionFactory>(_ => new SqliteConnectionFactory(sqliteConnectionString));
+builder.Services.AddSingleton<DatabaseInitializer>();
+builder.Services.AddScoped<IStrategyInstanceRepository, SqliteStrategyInstanceRepository>();
+builder.Services.AddScoped<IStrategyOrderRepository, SqliteStrategyOrderRepository>();
+// Scoped (not Singleton): depends on IBroker, which is Scoped when UseSimulatedBroker=false
+// (SchwabBroker) — a Singleton here would be a captive-dependency error in that configuration.
+builder.Services.AddScoped<IStrategyOrderExecutor, StrategyOrderExecutor>();
+
 // --- TQQQ weekly strategy ---
-builder.Services.AddSingleton<ITqqqWeeklyStateStore, JsonFileTqqqWeeklyStateStore>();
+builder.Services.AddSingleton<ITqqqWeeklyStateStore, SqliteTqqqWeeklyStateStore>();
 builder.Services.AddScoped<ITqqqWeeklyStrategyService, TqqqWeeklyStrategyService>();
 
 // --- Quartz ---
@@ -72,12 +84,16 @@ builder.Services.AddQuartzHostedService(opts => opts.WaitForJobsToComplete = tru
 
 var app = builder.Build();
 
+// Idempotent — CREATE TABLE/INDEX IF NOT EXISTS, safe to run on every startup.
+app.Services.GetRequiredService<DatabaseInitializer>().EnsureCreated();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseSerilogRequestLogging();
+app.UseStaticFiles(); // serves wwwroot/dashboard.html
 app.MapControllers();
 
 app.Run();

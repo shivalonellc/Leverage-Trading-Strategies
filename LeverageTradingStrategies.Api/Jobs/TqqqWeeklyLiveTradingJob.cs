@@ -1,6 +1,9 @@
+using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
 using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
+using LeverageTradingStrategies.Infrastructure.Data;
+using LeverageTradingStrategies.Infrastructure.Data.Entities;
 using LeverageTradingStrategies.Infrastructure.Helpers;
 using LeverageTradingStrategies.Infrastructure.Quotes;
 using LeverageTradingStrategies.Infrastructure.State;
@@ -17,14 +20,27 @@ namespace LeverageTradingStrategies.Api.Jobs
     /// itself via the state's LastXxxDate fields), so it's safe for this job to call every
     /// phase method unconditionally on every tick — only the phases whose gate conditions are
     /// met will actually do anything.
+    ///
+    /// Capital sizing now comes from this strategy INSTANCE's own StrategyInstances.CurrentCapital
+    /// (not raw broker account equity), and every tick is gated on the instance's Status:
+    ///   - Killed: skip everything (the kill controller endpoint already flattened the position
+    ///     synchronously when the switch was thrown — this job just stays out of the way).
+    ///   - Paused: skip EvaluateSessionOpen ONLY when flat (no new entries), but keep running
+    ///     every other phase normally so an existing position is still fully managed (take-profit,
+    ///     avg-down via SessionOpen when holding, force-close, stop-loss) until it's closed out.
+    ///   - Running: normal, unrestricted operation.
     /// </summary>
     [DisallowConcurrentExecution]
     public class TqqqWeeklyLiveTradingJob : IJob
     {
+        private const string StrategyType = "TqqqWeekly";
+
         private readonly IBroker _broker;
         private readonly IQuoteProvider _quoteProvider;
         private readonly ITqqqWeeklyStrategyService _strategy;
         private readonly ITqqqWeeklyStateStore _stateStore;
+        private readonly IStrategyInstanceRepository _instanceRepository;
+        private readonly IStrategyOrderExecutor _orderExecutor;
         private readonly IOptions<AppSettingsOptions> _options;
         private readonly ILogger<TqqqWeeklyLiveTradingJob> _logger;
 
@@ -33,6 +49,8 @@ namespace LeverageTradingStrategies.Api.Jobs
             IQuoteProvider quoteProvider,
             ITqqqWeeklyStrategyService strategy,
             ITqqqWeeklyStateStore stateStore,
+            IStrategyInstanceRepository instanceRepository,
+            IStrategyOrderExecutor orderExecutor,
             IOptions<AppSettingsOptions> options,
             ILogger<TqqqWeeklyLiveTradingJob> logger)
         {
@@ -40,6 +58,8 @@ namespace LeverageTradingStrategies.Api.Jobs
             _quoteProvider = quoteProvider;
             _strategy = strategy;
             _stateStore = stateStore;
+            _instanceRepository = instanceRepository;
+            _orderExecutor = orderExecutor;
             _options = options;
             _logger = logger;
         }
@@ -73,6 +93,14 @@ namespace LeverageTradingStrategies.Api.Jobs
                 return;
             }
 
+            var instance = await _instanceRepository.GetOrCreateAsync(StrategyType, tqqq.Symbol, tqqq.AllocatedCapital, tqqq.CompoundingEnabled, ct);
+
+            if (instance.Status == StrategyStatus.Killed)
+            {
+                _logger.LogDebug("Strategy instance #{Id} ({Symbol}) is Killed — skipping this tick entirely", instance.Id, tqqq.Symbol);
+                return;
+            }
+
             var nowEastern = MarketHoursHelper.GetEasternNow();
             var tradingDate = DateOnly.FromDateTime(nowEastern);
 
@@ -83,25 +111,16 @@ namespace LeverageTradingStrategies.Api.Jobs
                 return;
             }
 
+            if (instance.CurrentCapital <= 0)
+            {
+                _logger.LogWarning("Strategy instance #{Id} ({Symbol}) has CurrentCapital {Value} — skipping this tick to avoid a zero/garbage-sized order",
+                    instance.Id, tqqq.Symbol, instance.CurrentCapital);
+                return;
+            }
+
             var accountNumber = settings.Trading.AccountNumber;
-            decimal portfolioValue;
-            try
-            {
-                portfolioValue = await _broker.GetPortfolioValueAsync(accountNumber, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Could not fetch portfolio value — skipping this tick");
-                return;
-            }
-
-            if (portfolioValue <= 0)
-            {
-                _logger.LogWarning("Portfolio value reported as {Value} — skipping this tick to avoid a zero/garbage-sized order", portfolioValue);
-                return;
-            }
-
-            var state = await _stateStore.GetOrCreateAsync(tqqq.Symbol, ct);
+            var isSimulated = settings.Trading.UseSimulatedBroker;
+            var state = await _stateStore.GetOrCreateAsync(instance.Id, tqqq.Symbol, ct);
 
             // Holiday calendar limitation: these two flags approximate "day before last
             // trading day of the week" / "last trading day of the week" as plain
@@ -112,73 +131,46 @@ namespace LeverageTradingStrategies.Api.Jobs
             bool isLastTradingDayOfWeek = nowEastern.DayOfWeek == DayOfWeek.Friday;
             bool isNearSessionClose = nowEastern.TimeOfDay >= new TimeSpan(15, 50, 0);
 
-            await ExecuteDecisionAsync(
-                _strategy.EvaluateSessionOpen(state, tradingDate, quote.OpenPrice, portfolioValue),
-                accountNumber, tqqq.Symbol, ct);
+            // Pause = no NEW entries, but an existing position keeps being fully managed.
+            // Skip only when paused AND currently flat; every other phase below (take-profit,
+            // avg-down-while-holding, force-close, stop-loss) still runs regardless of pause.
+            bool skipSessionOpen = instance.Status == StrategyStatus.Paused && !state.Holding;
+            if (skipSessionOpen)
+            {
+                _logger.LogDebug("Strategy instance #{Id} ({Symbol}) is Paused and flat — skipping new-entry evaluation this tick", instance.Id, tqqq.Symbol);
+            }
+            else
+            {
+                await _orderExecutor.ExecuteAsync(
+                    instance,
+                    _strategy.EvaluateSessionOpen(state, tradingDate, quote.OpenPrice, instance.CurrentCapital),
+                    quote.OpenPrice, accountNumber, isSimulated, ct);
+            }
 
-            await ExecuteDecisionAsync(
+            await _orderExecutor.ExecuteAsync(
+                instance,
                 _strategy.EvaluateIntradayTakeProfit(state, quote.HighPrice),
-                accountNumber, tqqq.Symbol, ct);
+                quote.HighPrice, accountNumber, isSimulated, ct);
 
             if (nowEastern.Hour >= tqqq.ForceCloseHourEt)
             {
-                await ExecuteDecisionAsync(
+                await _orderExecutor.ExecuteAsync(
+                    instance,
                     _strategy.EvaluateForceCloseWeekly(state, tradingDate, isDayBeforeLastTradingDayOfWeek, quote.LastPrice),
-                    accountNumber, tqqq.Symbol, ct);
+                    quote.LastPrice, accountNumber, isSimulated, ct);
             }
 
             if (isNearSessionClose)
             {
-                await ExecuteDecisionAsync(
+                await _orderExecutor.ExecuteAsync(
+                    instance,
                     _strategy.EvaluateSessionClose(state, tradingDate, isLastTradingDayOfWeek, quote.LastPrice),
-                    accountNumber, tqqq.Symbol, ct);
+                    quote.LastPrice, accountNumber, isSimulated, ct);
 
                 _strategy.RollDailyVolatilityHistory(state, tradingDate, quote.LastPrice);
             }
 
-            await _stateStore.SaveAsync(state, ct);
-        }
-
-        private async Task ExecuteDecisionAsync(TqqqWeeklyDecision decision, string accountNumber, string symbol, CancellationToken ct)
-        {
-            if (decision.Action == TqqqWeeklyActionType.None)
-            {
-                _logger.LogDebug("No action: {Reason}", decision.Reason);
-                return;
-            }
-
-            if (decision.Quantity <= 0)
-            {
-                _logger.LogWarning("{Action} decision for {Symbol} had non-positive quantity ({Qty}) — skipping order placement. Reason: {Reason}",
-                    decision.Action, symbol, decision.Quantity, decision.Reason);
-                return;
-            }
-
-            _logger.LogInformation("{Action} {Symbol} x{Qty} — {Reason}", decision.Action, symbol, decision.Quantity, decision.Reason);
-
-            try
-            {
-                string result = decision.Action switch
-                {
-                    TqqqWeeklyActionType.EnterLong => await _broker.PlaceBuyMarketOrderAsync(accountNumber, symbol, decision.Quantity, ct),
-                    TqqqWeeklyActionType.AddToPosition => await _broker.PlaceBuyMarketOrderAsync(accountNumber, symbol, decision.Quantity, ct),
-                    TqqqWeeklyActionType.SellAll => await _broker.PlaceSellMarketOrderAsync(accountNumber, symbol, decision.Quantity, ct),
-                    _ => "{}"
-                };
-                _logger.LogInformation("Broker response for {Action} {Symbol} x{Qty}: {Result}", decision.Action, symbol, decision.Quantity, result);
-            }
-            catch (Exception ex)
-            {
-                // NOTE (v1 known gap): this does not reconcile state against the broker's
-                // actual fill on failure. If an order is rejected after state was already
-                // mutated optimistically by the strategy service, state and the real broker
-                // position can drift out of sync until the next manual reconciliation.
-                // Recommended hardening before trading real size: add fill confirmation +
-                // automatic reconciliation against IBroker.GetSymbolPositionAsync, similar to
-                // the pattern used for options-seller order confirmation in MarketMatrixPreparer.
-                _logger.LogError(ex, "Order placement FAILED for {Action} {Symbol} x{Qty} — state may now be out of sync with the real broker position, investigate immediately",
-                    decision.Action, symbol, decision.Quantity);
-            }
+            await _stateStore.SaveAsync(instance.Id, state, ct);
         }
     }
 }

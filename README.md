@@ -32,20 +32,39 @@ dotnet build
 - `LeverageTradingStrategies.Infrastructure/`
   - `Brokers/` — `IBroker`, `SchwabBroker` (copied from MarketMatrixPreparer, unmodified logic
     plus a new `GetPortfolioValueAsync`), `SimulatedBroker` (in-memory, for dry-run smoke
-    testing only — **not** a backtest engine).
+    testing only — **not** a backtest engine, but it captures order state the same shape a
+    live broker would, per the dry-run requirement).
   - `Quotes/` — `IQuoteProvider` / `SchwabQuoteProvider`: a lightweight quote poll (open/high/
     low/last/prev-close) instead of the full 1-min-bar ingestion pipeline — a weekly-cadence
     strategy doesn't need Renko-level granularity.
-  - `State/` — `ITqqqWeeklyStateStore` / `JsonFileTqqqWeeklyStateStore`: durable per-symbol
-    state as a flat JSON file (not EF/SQLite for v1 — see the class remarks for why).
+  - `State/` — `ITqqqWeeklyStateStore` / `SqliteTqqqWeeklyStateStore`: durable per-strategy-
+    instance state, one row per `StrategyInstanceId` in `TqqqWeeklyStates`.
+  - `Data/` — the persistence layer (raw ADO.NET via `Microsoft.Data.Sqlite`, deliberately not
+    EF Core — see the `Microsoft.Data.Sqlite` PackageReference comment in the Infrastructure
+    `.csproj` for why): `Schema.sql` (reference copy) / `DatabaseInitializer` (runs the same SQL
+    idempotently on every startup), `StrategyInstances` (capital allocation, compounding
+    flag, kill/pause status — generic `StrategyType` column so a future options-seller
+    instance can share this table), `StrategyOrders` (full order audit trail: what was
+    requested, why, and what happened — written identically for simulated and live orders).
   - `Models/TqqqWeeklyState.cs` — the persisted state shape.
   - `Configuration/AppSettingsOptions.cs` — every strategy parameter, defaulted to the
-    verified baseline values.
+    verified baseline values, plus capital/compounding config and the entry-day close-based
+    stop threshold (`EntryDayCloseStopPct`).
+- `LeverageTradingStrategies.Domain/Orders/` — `IStrategyOrderExecutor` /
+  `StrategyOrderExecutor`: the single code path both the live job and the kill-switch endpoint
+  use to place an order, record it (Submitted → Filled/Failed), and — on a filled exit, if
+  compounding is enabled — roll the realized P&L into the instance's `CurrentCapital`.
 - `LeverageTradingStrategies.Api/`
   - `Jobs/TqqqWeeklyLiveTradingJob.cs` — the Quartz job that ticks during market hours and
-    drives the strategy.
-  - `Controllers/TqqqWeeklyController.cs` — `GET /api/tqqq-weekly/status`.
-  - `Program.cs` — DI/Quartz/Serilog wiring.
+    drives the strategy. Gates every tick on the strategy instance's Status: skips entirely
+    when Killed, skips new entries only when Paused (an existing position keeps being managed).
+  - `Controllers/TqqqWeeklyController.cs` — `GET status` / `GET orders` / `POST pause` /
+    `POST resume` / `POST kill` (immediate, synchronous square-off — does not wait for the
+    next Quartz tick).
+  - `wwwroot/dashboard.html` — single-file monitoring dashboard (status, position, config,
+    recent orders, Pause/Resume/Kill buttons). Open `/dashboard.html` once the app is running.
+  - `Program.cs` — DI/Quartz/Serilog/SQLite wiring; runs `DatabaseInitializer.EnsureCreated()`
+    on startup.
 - `SchwabApiCS/` — copied wholesale from MarketMatrixPreparer (the Schwab REST/order client).
 
 ## Before going live
@@ -77,9 +96,21 @@ dotnet build
    - **No margin cap.** Matches the verified baseline (unlimited margin), but real accounts
      have real margin limits — an avg-down could get rejected by the broker if you're not
      tracking buying power. Not wired in yet.
-6. This repo is not yet pushed to GitHub — create an empty repo (no README/gitignore) and:
-   ```
-   git remote add origin <your-repo-url>
-   git branch -M main
-   git push -u origin main
-   ```
+6. The database file (`leverage-trading.db`, path set by `ConnectionStrings:SqliteDb`) is
+   created automatically on first run. `AllocatedCapital` / `CompoundingEnabled` in
+   `appsettings.json` only **seed** the `StrategyInstances` row the first time it's ever
+   created — after that, change them via the DB/controller, not by editing config and
+   restarting (see `IStrategyInstanceRepository` remarks).
+7. Kill is permanent for a given strategy instance (by design, per the "square off and halt"
+   requirement) — there's no "un-kill." To trade the symbol again, that means starting a fresh
+   instance (a new DB row); this wasn't built as a self-service endpoint since it's meant to be
+   a deliberate, rare action.
+
+## Repo housekeeping
+
+This repo was already pushed to GitHub (`origin/master`). Standard flow going forward:
+```
+git add -A
+git commit -m "..."
+git push
+```
