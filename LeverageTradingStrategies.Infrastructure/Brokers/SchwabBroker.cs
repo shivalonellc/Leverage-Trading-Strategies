@@ -704,6 +704,75 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
             }, $"Getting fill price for order {orderId}");
         }
 
+        // ============================================================================
+        // VERTICAL CREDIT SPREAD — genuine 2-leg combo order. Unlike single-leg option orders,
+        // this sends ONE order with complexOrderStrategyType=VERTICAL and both legs in
+        // orderLegCollection — the exchange fills both legs together or neither at all, which
+        // is the actual fix for "don't let the short leg fill without its protective long leg."
+        // Generalized over both a bull put credit spread (both legs puts) and a bear call
+        // credit spread (both legs calls) — this method only touches OCC symbols, not rights.
+        // ============================================================================
+
+        private async Task<string> PlaceVerticalSpreadOrderAsync(
+            string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal price,
+            Order.OrderType orderType, Order.Position position, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(longOptionSymbol) || string.IsNullOrWhiteSpace(shortOptionSymbol) ||
+                contracts <= 0 || price <= 0 || string.IsNullOrWhiteSpace(accountNumber))
+                return JsonSerializer.Serialize(new { error = "Invalid parameter payloads sent to execution core" });
+
+            // Lock both legs' symbols, always in the same (sorted) order, so a concurrent combo
+            // order touching an overlapping symbol can never deadlock against this one.
+            var symbols = new[] { longOptionSymbol, shortOptionSymbol }.OrderBy(s => s, StringComparer.Ordinal).ToArray();
+            var lockA = GetSymbolLock(symbols[0]);
+            var lockB = GetSymbolLock(symbols[1]);
+            await lockA.WaitAsync(ct);
+            await lockB.WaitAsync(ct);
+
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var _schwabApi = scope.ServiceProvider.GetRequiredService<SchwabApi>();
+
+                var order = new Order(orderType, Order.OrderStrategyTypes.SINGLE, Order.Session.NORMAL, Order.Duration.DAY, price)
+                {
+                    complexOrderStrategyType = Order.ComplexOrderStrategyType.VERTICAL.ToString()
+                };
+
+                // Open: BUY_TO_OPEN the protective long leg, SELL_TO_OPEN the short leg.
+                // Close: SELL_TO_CLOSE the long leg, BUY_TO_CLOSE the short leg. Leg order in
+                // the collection is cosmetic for a combo order — the exchange fills both legs
+                // together regardless.
+                var longInstruction = position == Order.Position.TO_OPEN ? Order.Instruction.BUY_TO_OPEN : Order.Instruction.SELL_TO_CLOSE;
+                var shortInstruction = position == Order.Position.TO_OPEN ? Order.Instruction.SELL_TO_OPEN : Order.Instruction.BUY_TO_CLOSE;
+
+                order.Add(new Order.OrderLeg(longOptionSymbol, Order.AssetType.OPTION, longInstruction, contracts));
+                order.Add(new Order.OrderLeg(shortOptionSymbol, Order.AssetType.OPTION, shortInstruction, contracts));
+
+                var result = await _schwabApi.OrderExecuteNewAsync(accountNumber, order);
+
+                if (result?.Data == null)
+                    return JsonSerializer.Serialize(new { status = "failed", message = result?.ResponseText ?? "Null structural response from Schwab routing engine" });
+
+                var orderId = result.Data.Value;
+                var (rejected, orderStatus, description) = await CheckOrderStatusAsync(_schwabApi, accountNumber, orderId, ct);
+                if (rejected)
+                    return JsonSerializer.Serialize(new { status = "rejected", orderId = orderId.ToString(), reason = description ?? orderStatus, longOptionSymbol, shortOptionSymbol, contracts, price });
+
+                return JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), orderStatus, longOptionSymbol, shortOptionSymbol, contracts, price });
+            }
+            finally
+            {
+                lockB.Release();
+                lockA.Release();
+            }
+        }
+
+        public Task<string> PlaceVerticalCreditSpreadOpenOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netCredit, CancellationToken ct = default)
+            => PlaceVerticalSpreadOrderAsync(accountNumber, longOptionSymbol, shortOptionSymbol, contracts, netCredit, Order.OrderType.NET_CREDIT, Order.Position.TO_OPEN, ct);
+
+        public Task<string> PlaceVerticalCreditSpreadCloseOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netDebit, CancellationToken ct = default)
+            => PlaceVerticalSpreadOrderAsync(accountNumber, longOptionSymbol, shortOptionSymbol, contracts, netDebit, Order.OrderType.NET_DEBIT, Order.Position.TO_CLOSE, ct);
     }
 
 

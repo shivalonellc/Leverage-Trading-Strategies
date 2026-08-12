@@ -18,6 +18,10 @@
          already uses for its own schema changes. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
+    <!-- Option chain/greeks data for the vertical-spread module, same package RenkoSwingSmartV2
+         already uses (Tradier.Client namespace). Order EXECUTION stays on Schwab (SchwabApiCS
+         below); Tradier is chain-data only. -->
+    <PackageReference Include="tradier-dotnet-client" Version="1.0.11" />
   </ItemGroup>
 
   <ItemGroup>

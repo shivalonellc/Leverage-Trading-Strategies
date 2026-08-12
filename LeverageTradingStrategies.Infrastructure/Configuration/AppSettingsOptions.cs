@@ -5,6 +5,8 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
     {
         public TradingOptions Trading { get; set; } = new();
         public TqqqWeeklyOptions TqqqWeekly { get; set; } = new();
+        public TradierOptions Tradier { get; set; } = new();
+        public VerticalSpreadOptions VerticalSpread { get; set; } = new();
     }
 
     public class TradingOptions
@@ -17,6 +19,36 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
         /// <summary>When true, IBroker resolves to SimulatedBroker instead of SchwabBroker —
         /// use for dry runs / local testing before live capital is at risk.</summary>
         public bool UseSimulatedBroker { get; set; } = true;
+    }
+
+    /// <summary>Tradier is used ONLY for option chain/greeks data (vertical-spread builder +
+    /// marking job) — real order execution always goes through Schwab regardless of this
+    /// section. Token/AccountId are left blank here deliberately; fill them in locally in
+    /// appsettings.json (or user secrets) rather than committing a live API token.</summary>
+    public class TradierOptions
+    {
+        public string Token { get; set; } = string.Empty;
+        public string AccountId { get; set; } = string.Empty;
+
+        /// <summary>true = Tradier's sandbox/paper endpoint (delayed/simulated data). Since
+        /// this module already reads real chain data for a PAPER-tracked position by design,
+        /// most setups will want this false (real market data) even while spreads themselves
+        /// stay in Paper status — sandbox data is delayed and not representative of real
+        /// mark-to-market performance.</summary>
+        public bool UseSandbox { get; set; } = false;
+    }
+
+    /// <summary>Vertical credit spread module: manually built in the dashboard (symbol,
+    /// expiration, strikes), Saved into Paper (mark-to-market tracked against real Tradier
+    /// data, no broker order), Deployed into Live (real Schwab combo order) on explicit user
+    /// action. See VerticalSpreadMarkingJob for the periodic mark/expiration-close tick.</summary>
+    public class VerticalSpreadOptions
+    {
+        public bool Enabled { get; set; } = false;
+
+        /// <summary>Quartz cron for VerticalSpreadMarkingJob — how often Paper/Live spreads get
+        /// a fresh mark-to-market snapshot against the live Tradier chain.</summary>
+        public string MarkingCronSchedule { get; set; } = "0 */5 9-16 ? * MON-FRI";
     }
 
     /// <summary>

@@ -42,6 +42,23 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
 
         Task<decimal?> GetOrderFillPriceAsync(string accountNumber, string orderId, CancellationToken ct = default);
 
+        // --- VERTICAL CREDIT SPREAD (2-leg combo order) ---
+        // Sends ONE order with complexOrderStrategyType=VERTICAL and both legs in the same leg
+        // collection, instead of two independently-placed single-leg option orders. Schwab
+        // routes a combo order like this to the options exchange as a single spread order --
+        // the exchange either executes both legs together or neither fills at all, which is
+        // what actually rules out a short leg filling without its protective long leg (two
+        // independent orders can never fully guarantee that, however carefully sequenced).
+        // Works for BOTH a bull put credit spread (both legs puts) and a bear call credit
+        // spread (both legs calls) -- the method only cares about the two OCC symbols, not
+        // which right they are.
 
+        /// <summary>Opens a vertical credit spread: BUY_TO_OPEN the long (protective) leg,
+        /// SELL_TO_OPEN the short (premium-collecting) leg, as one NET_CREDIT combo order.</summary>
+        Task<string> PlaceVerticalCreditSpreadOpenOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netCredit, CancellationToken ct = default);
+
+        /// <summary>Closes a vertical credit spread opened via the method above: SELL_TO_CLOSE
+        /// the long leg, BUY_TO_CLOSE the short leg, as one NET_DEBIT combo order.</summary>
+        Task<string> PlaceVerticalCreditSpreadCloseOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netDebit, CancellationToken ct = default);
     }
 }

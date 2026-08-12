@@ -148,6 +148,45 @@ supplied explicitly. A natural test sequence: `account` → `order/market` → `
 → `order/take-profit` → `order/close`, first with `live=false` to confirm the shapes, then
 once with `live=true` (1 share) to confirm it actually reaches Schwab.
 
+## Vertical credit spread module
+
+A second, independent strategy alongside TQQQ weekly: manually build a vertical credit spread
+in the dashboard (Vertical Spreads tab), Save it (starts real-data mark-to-market tracking, no
+broker order), then Deploy it when ready (places a real Schwab 2-leg combo order). Option
+chain/greeks come from **Tradier**, not Schwab — Schwab is used only for order execution.
+
+- **Infrastructure/Options/** — `BlackScholesCalculator` (ported from MarketMatrixPreparer),
+  `OptionModels.cs` (chain/contract DTOs), `ITradierOptionsProvider`/`TradierOptionsProvider`
+  (wraps the `tradier-dotnet-client` NuGet package — same one RenkoSwingSmartV2 already uses).
+- **Domain/Options/** — `IVerticalSpreadPricingService`/`VerticalSpreadPricingService`: builds
+  both payoff curves (payoff-AT-EXPIRATION, pure intrinsic value; and a live "Today" curve,
+  repriced via Black-Scholes using the position's actual remaining DTE and current chain IV) plus
+  the current mark-to-market P&L from live bid/ask. `IVerticalSpreadOrderExecutor`/
+  `VerticalSpreadOrderExecutor`: places the real open/close combo order and honors broker
+  rejection the same way `StrategyOrderExecutor` does for TQQQ (never blindly marks a rejected
+  order as filled).
+- **Data** — `VerticalSpreadStrategies` / `VerticalSpreadOrders` / `VerticalSpreadMarks` tables,
+  separate from `StrategyInstances`/`StrategyOrders` (several concurrent spreads on the same
+  underlying at different strikes is the normal case here, which conflicts with
+  `StrategyInstances`' `UNIQUE(StrategyType, Symbol)`; and a combo order's two legs don't fit
+  `StrategyOrders`' single-symbol shape).
+- **`VerticalSpreadMarkingJob`** (Quartz) — every tick, fetches a live Tradier chain for every
+  Paper/Live spread, records a mark-to-market snapshot, and auto-closes on expiration day (Paper
+  settles against intrinsic value; Live places the real close combo order).
+- **`VerticalSpreadController`** (`/api/vertical-spread/*`) — `GET expirations` / `GET chain`,
+  `POST preview` (price a candidate off the live chain, no persistence), `POST save` (persist as
+  Paper), `POST deploy/{id}?live=true|false`, `POST close/{id}?live=true|false`, `GET list`,
+  `GET {id}`, `GET {id}/orders`, `GET {id}/marks`, `GET {id}/payoff`. Same `live` flag convention
+  as `BrokerTestController` — default `false` routes to `SimulatedBroker`.
+
+**Setup**: fill in `AppSettings:Tradier:Token` / `AccountId` in `appsettings.json` (left blank —
+don't commit a real token), flip `AppSettings:VerticalSpread:Enabled` to `true` once you're ready
+for the marking job to actually tick.
+
+Only put verticals (bull put credit) and call verticals (bear call credit) are supported — both
+route through the same generalized `PlaceVerticalCreditSpread{Open,Close}OrderAsync` combo-order
+methods on `IBroker`.
+
 ## Repo housekeeping
 
 This repo was already pushed to GitHub (`origin/master`). Standard flow going forward:

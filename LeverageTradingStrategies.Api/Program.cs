@@ -1,14 +1,17 @@
 using LeverageTradingStrategies.Api.Jobs;
+using LeverageTradingStrategies.Domain.Options;
 using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
 using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Data;
+using LeverageTradingStrategies.Infrastructure.Options;
 using LeverageTradingStrategies.Infrastructure.Quotes;
 using LeverageTradingStrategies.Infrastructure.State;
 using Quartz;
 using SchwabApiCS;
 using Serilog;
+using Tradier.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,6 +80,19 @@ builder.Services.AddScoped<IStrategyOrderExecutor, StrategyOrderExecutor>();
 builder.Services.AddSingleton<ITqqqWeeklyStateStore, SqliteTqqqWeeklyStateStore>();
 builder.Services.AddScoped<ITqqqWeeklyStrategyService, TqqqWeeklyStrategyService>();
 
+// --- Tradier (option chain/greeks data ONLY -- order execution stays on Schwab above) ---
+builder.Services.AddScoped<TradierClient>(sp =>
+    new TradierClient(
+        builder.Configuration["AppSettings:Tradier:Token"],
+        builder.Configuration["AppSettings:Tradier:AccountId"],
+        builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox")));
+builder.Services.AddScoped<ITradierOptionsProvider, TradierOptionsProvider>();
+
+// --- Vertical credit spread module ---
+builder.Services.AddScoped<IVerticalSpreadRepository, SqliteVerticalSpreadRepository>();
+builder.Services.AddSingleton<IVerticalSpreadPricingService, VerticalSpreadPricingService>(); // pure math, no state
+builder.Services.AddScoped<IVerticalSpreadOrderExecutor, VerticalSpreadOrderExecutor>();
+
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
 {
@@ -88,6 +104,15 @@ builder.Services.AddQuartz(q =>
         .ForJob(jobKey)
         .WithIdentity("TqqqWeeklyLiveTradingJob-trigger")
         .WithCronSchedule(cron));
+
+    var spreadJobKey = new JobKey("VerticalSpreadMarkingJob");
+    q.AddJob<VerticalSpreadMarkingJob>(opts => opts.WithIdentity(spreadJobKey));
+
+    var spreadCron = builder.Configuration["AppSettings:VerticalSpread:MarkingCronSchedule"] ?? "0 */5 9-16 ? * MON-FRI";
+    q.AddTrigger(opts => opts
+        .ForJob(spreadJobKey)
+        .WithIdentity("VerticalSpreadMarkingJob-trigger")
+        .WithCronSchedule(spreadCron));
 });
 builder.Services.AddQuartzHostedService(opts => opts.WaitForJobsToComplete = true);
 

@@ -105,6 +105,18 @@ namespace LeverageTradingStrategies.Infrastructure.Brokers
         public Task<decimal?> GetOrderFillPriceAsync(string accountNumber, string orderId, CancellationToken ct = default)
             => Task.FromResult<decimal?>(CurrentPrice("TQQQ")); // best-effort — dry-run orders fill instantly at the seeded quote
 
+        public Task<string> PlaceVerticalCreditSpreadOpenOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netCredit, CancellationToken ct = default)
+        {
+            int orderId = Interlocked.Increment(ref _nextOrderId);
+            return Task.FromResult(System.Text.Json.JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), longOptionSymbol, shortOptionSymbol, contracts, price = netCredit, simulated = true }));
+        }
+
+        public Task<string> PlaceVerticalCreditSpreadCloseOrderAsync(string accountNumber, string longOptionSymbol, string shortOptionSymbol, int contracts, decimal netDebit, CancellationToken ct = default)
+        {
+            int orderId = Interlocked.Increment(ref _nextOrderId);
+            return Task.FromResult(System.Text.Json.JsonSerializer.Serialize(new { status = "success", orderId = orderId.ToString(), longOptionSymbol, shortOptionSymbol, contracts, price = netDebit, simulated = true }));
+        }
+
         private string OrderResult(string symbol, int quantity)
         {
             int orderId = Interlocked.Increment(ref _nextOrderId);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TQQQ Weekly — Strategy Monitor</title>
+<title>Strategy Monitor</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -14,105 +14,208 @@
   header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .wrap { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
+  .wrap { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
   .card .value { font-size: 22px; font-weight: 600; }
   .value.green { color: var(--green); } .value.red { color: var(--red); } .value.amber { color: var(--amber); }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .badge.Running { background: rgba(53,201,143,.15); color: var(--green); }
-  .badge.Paused { background: rgba(224,169,63,.15); color: var(--amber); }
-  .badge.Killed { background: rgba(229,86,109,.15); color: var(--red); }
+  .badge.Running, .badge.Live { background: rgba(53,201,143,.15); color: var(--green); }
+  .badge.Paused, .badge.Paper { background: rgba(224,169,63,.15); color: var(--amber); }
+  .badge.Killed, .badge.Failed { background: rgba(229,86,109,.15); color: var(--red); }
+  .badge.Closed { background: rgba(139,147,161,.15); color: var(--muted); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
   .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
   tr:last-child td { border-bottom: none; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: rgba(255,255,255,.03); }
   .side-Buy { color: var(--green); } .side-Sell { color: var(--red); }
-  .status-Filled { color: var(--green); } .status-Failed { color: var(--red); } .status-Submitted { color: var(--amber); }
+  .status-Filled { color: var(--green); } .status-Failed { color: var(--red); } .status-Submitted { color: var(--amber); } .status-Rejected { color: var(--red); }
   .controls { display: flex; gap: 10px; }
   button { border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.small { padding: 6px 12px; font-size: 12px; }
   #btnPause { background: rgba(224,169,63,.15); color: var(--amber); }
   #btnResume { background: rgba(79,142,247,.15); color: var(--blue); }
   #btnKill { background: rgba(229,86,109,.15); color: var(--red); }
+  .btn-blue { background: rgba(79,142,247,.15); color: var(--blue); }
+  .btn-green { background: rgba(53,201,143,.15); color: var(--green); }
+  .btn-red { background: rgba(229,86,109,.15); color: var(--red); }
+  .btn-muted { background: rgba(139,147,161,.15); color: var(--muted); }
   button:hover { filter: brightness(1.2); }
   button:disabled { opacity: .4; cursor: not-allowed; }
   .muted { color: var(--muted); }
   .reason { color: var(--muted); font-size: 12px; max-width: 380px; }
   .sim-tag { display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(79,142,247,.15); color: var(--blue); }
   .err { color: var(--red); padding: 12px; }
+  .tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
+  .tab-btn { background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 600; padding: 12px 16px; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0; }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
+  .tabpanel { display: none; }
+  .tabpanel.active { display: block; }
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: flex-end; }
+  .form-field { display: flex; flex-direction: column; gap: 4px; }
+  .form-field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .form-field input, .form-field select { background: #0f1115; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 13px; width: 140px; }
+  .form-field.wide input { width: 220px; }
+  .payoff-stats { display: flex; gap: 24px; margin: 10px 0; flex-wrap: wrap; }
+  .payoff-stats .stat { font-size: 13px; }
+  .payoff-stats .stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+  .legend { display: flex; gap: 16px; font-size: 12px; margin-top: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  #detailPanel { display: none; }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>TQQQ Weekly Strategy <span id="simTag"></span></h1>
+    <h1 id="pageTitle">TQQQ Weekly Strategy <span id="simTag"></span></h1>
     <div class="sub" id="lastUpdated">loading…</div>
   </div>
-  <div class="controls">
+  <div class="controls" id="tqqqControls">
     <button id="btnPause" onclick="doAction('pause')">Pause</button>
     <button id="btnResume" onclick="doAction('resume')">Resume</button>
     <button id="btnKill" onclick="confirmKill()">Kill (Square Off)</button>
   </div>
 </header>
 
+<div class="tabs">
+  <button class="tab-btn active" id="tabBtn-tqqq" onclick="showTab('tqqq')">TQQQ Weekly</button>
+  <button class="tab-btn" id="tabBtn-spreads" onclick="showTab('spreads')">Vertical Spreads</button>
+</div>
+
 <div class="wrap">
   <div id="errorBox"></div>
 
-  <div class="grid">
-    <div class="card">
-      <div class="label">Status</div>
-      <div class="value"><span id="statusBadge" class="badge">…</span></div>
-    </div>
-    <div class="card">
-      <div class="label">Current Capital</div>
-      <div class="value" id="currentCapital">—</div>
-    </div>
-    <div class="card">
-      <div class="label">Allocated Capital</div>
-      <div class="value" id="allocatedCapital">—</div>
-    </div>
-    <div class="card">
-      <div class="label">Compounding</div>
-      <div class="value" id="compounding">—</div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Position</h2>
+  <!-- ============ TQQQ WEEKLY TAB ============ -->
+  <div class="tabpanel active" id="tab-tqqq">
     <div class="grid">
-      <div class="card"><div class="label">Holding</div><div class="value" id="holding">—</div></div>
-      <div class="card"><div class="label">Quantity</div><div class="value" id="quantity">—</div></div>
-      <div class="card"><div class="label">Entry Price</div><div class="value" id="entryPrice">—</div></div>
-      <div class="card"><div class="label">Cost Basis</div><div class="value" id="costBasis">—</div></div>
-      <div class="card"><div class="label">Take-Profit Target</div><div class="value" id="targetPrice">—</div></div>
-      <div class="card"><div class="label">Entry Date</div><div class="value" id="entryDate">—</div></div>
+      <div class="card">
+        <div class="label">Status</div>
+        <div class="value"><span id="statusBadge" class="badge">…</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Current Capital</div>
+        <div class="value" id="currentCapital">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Allocated Capital</div>
+        <div class="value" id="allocatedCapital">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Compounding</div>
+        <div class="value" id="compounding">—</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Position</h2>
+      <div class="grid">
+        <div class="card"><div class="label">Holding</div><div class="value" id="holding">—</div></div>
+        <div class="card"><div class="label">Quantity</div><div class="value" id="quantity">—</div></div>
+        <div class="card"><div class="label">Entry Price</div><div class="value" id="entryPrice">—</div></div>
+        <div class="card"><div class="label">Cost Basis</div><div class="value" id="costBasis">—</div></div>
+        <div class="card"><div class="label">Take-Profit Target</div><div class="value" id="targetPrice">—</div></div>
+        <div class="card"><div class="label">Entry Date</div><div class="value" id="entryDate">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Config</h2>
+      <div class="grid">
+        <div class="card"><div class="label">Symbol</div><div class="value" id="cfgSymbol">—</div></div>
+        <div class="card"><div class="label">Enabled</div><div class="value" id="cfgEnabled">—</div></div>
+        <div class="card"><div class="label">Close Stop</div><div class="value" id="cfgCloseStop">—</div></div>
+        <div class="card"><div class="label">Entry-Day Close Stop</div><div class="value" id="cfgEntryDayStop">—</div></div>
+        <div class="card"><div class="label">Cron</div><div class="value" style="font-size:14px" id="cfgCron">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Orders</h2>
+      <table>
+        <thead>
+          <tr><th>Submitted (UTC)</th><th>Action</th><th>Side</th><th>Qty</th><th>Status</th><th>Fill Price</th><th>Realized P&amp;L</th><th>Reason</th></tr>
+        </thead>
+        <tbody id="ordersBody">
+          <tr><td colspan="8" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <div class="panel">
-    <h2>Config</h2>
-    <div class="grid">
-      <div class="card"><div class="label">Symbol</div><div class="value" id="cfgSymbol">—</div></div>
-      <div class="card"><div class="label">Enabled</div><div class="value" id="cfgEnabled">—</div></div>
-      <div class="card"><div class="label">Close Stop</div><div class="value" id="cfgCloseStop">—</div></div>
-      <div class="card"><div class="label">Entry-Day Close Stop</div><div class="value" id="cfgEntryDayStop">—</div></div>
-      <div class="card"><div class="label">Cron</div><div class="value" style="font-size:14px" id="cfgCron">—</div></div>
+  <!-- ============ VERTICAL SPREADS TAB ============ -->
+  <div class="tabpanel" id="tab-spreads">
+    <div class="panel">
+      <h2>Build a Vertical Credit Spread</h2>
+      <div class="form-row">
+        <div class="form-field"><label>Symbol</label><input id="vsSymbol" value="TQQQ" onchange="loadExpirations()"></div>
+        <div class="form-field"><label>Right</label>
+          <select id="vsRight" onchange="loadExpirations()">
+            <option value="Put">Put (Bull Put Credit)</option>
+            <option value="Call">Call (Bear Call Credit)</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Expiration</label><select id="vsExpiration"></select></div>
+        <div class="form-field"><label>Short Strike</label><input id="vsShortStrike" type="number" step="0.5"></div>
+        <div class="form-field"><label>Long Strike</label><input id="vsLongStrike" type="number" step="0.5"></div>
+        <div class="form-field"><label>Contracts</label><input id="vsContracts" type="number" value="1" min="1" style="width:70px"></div>
+        <button class="btn-blue" onclick="previewSpread()">Preview</button>
+        <button class="btn-green" id="btnSaveSpread" onclick="saveSpread()" disabled>Save (Paper)</button>
+      </div>
+      <div class="muted" id="vsChainHint" style="font-size:12px">Pick an expiration to see available strikes below.</div>
+      <div id="vsChainTable"></div>
+      <div id="vsPreviewBox" style="display:none">
+        <div class="payoff-stats">
+          <div class="stat"><div class="k">Net Credit</div><div id="pvNetCredit">—</div></div>
+          <div class="stat"><div class="k">Max Profit</div><div id="pvMaxProfit">—</div></div>
+          <div class="stat"><div class="k">Max Loss</div><div id="pvMaxLoss">—</div></div>
+          <div class="stat"><div class="k">Breakeven</div><div id="pvBreakeven">—</div></div>
+        </div>
+        <div id="vsPreviewChart"></div>
+        <div class="legend">
+          <span><span class="sw" style="background:#8b93a1"></span>At expiration</span>
+          <span><span class="sw" style="background:#e0a93f"></span>Today (live greeks)</span>
+          <span><span class="sw" style="background:#4f8ef7"></span>Current spot</span>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <h2>Recent Orders</h2>
-    <table>
-      <thead>
-        <tr><th>Submitted (UTC)</th><th>Action</th><th>Side</th><th>Qty</th><th>Status</th><th>Fill Price</th><th>Realized P&amp;L</th><th>Reason</th></tr>
-      </thead>
-      <tbody id="ordersBody">
-        <tr><td colspan="8" class="muted">Loading…</td></tr>
-      </tbody>
-    </table>
+    <div class="panel">
+      <h2>Saved Spreads</h2>
+      <table>
+        <thead>
+          <tr><th>Id</th><th>Symbol</th><th>Type</th><th>Expiration</th><th>Strikes</th><th>Contracts</th><th>Net Credit</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="spreadsBody">
+          <tr><td colspan="9" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel" id="detailPanel">
+      <h2 id="detailTitle">Spread Detail</h2>
+      <div class="payoff-stats">
+        <div class="stat"><div class="k">Current Spot</div><div id="dtSpot">—</div></div>
+        <div class="stat"><div class="k">Max Profit</div><div id="dtMaxProfit">—</div></div>
+        <div class="stat"><div class="k">Max Loss</div><div id="dtMaxLoss">—</div></div>
+        <div class="stat"><div class="k">Breakeven</div><div id="dtBreakeven">—</div></div>
+        <div class="stat"><div class="k">Current Mark P&amp;L</div><div id="dtMarkPnl">—</div></div>
+      </div>
+      <div id="detailPayoffChart"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:#8b93a1"></span>At expiration</span>
+        <span><span class="sw" style="background:#e0a93f"></span>Today (live greeks)</span>
+        <span><span class="sw" style="background:#4f8ef7"></span>Current spot</span>
+        <span><span class="sw" style="background:#35c98f"></span>Current mark P&amp;L</span>
+      </div>
+      <h2 style="margin-top:20px">P&amp;L Over Time</h2>
+      <div id="detailEquityChart"></div>
+    </div>
   </div>
 </div>
 
@@ -127,6 +230,19 @@ function fmtPct(v) {
   if (v === null || v === undefined) return '—';
   return (Number(v) * 100).toFixed(1) + '%';
 }
+function pnlClass(v) { return v > 0 ? 'green' : (v < 0 ? 'red' : ''); }
+
+function showTab(name) {
+  document.querySelectorAll('.tabpanel').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tabBtn-' + name).classList.add('active');
+  document.getElementById('tqqqControls').style.display = name === 'tqqq' ? 'flex' : 'none';
+  document.getElementById('pageTitle').firstChild.textContent = name === 'tqqq' ? 'TQQQ Weekly Strategy ' : 'Vertical Credit Spreads ';
+  if (name === 'spreads') { loadSpreads(); loadExpirations(); }
+}
+
+// ============ TQQQ WEEKLY ============
 
 async function loadStatus() {
   const res = await fetch('/api/tqqq-weekly/status');
@@ -159,8 +275,6 @@ async function loadStatus() {
   document.getElementById('cfgEnabled').textContent = (data.config.enabled ?? data.config.Enabled) ? 'Yes' : 'No';
   document.getElementById('cfgCron').textContent = data.config.cronSchedule ?? data.config.CronSchedule;
 
-  // DB-backed (StrategyConfig table) tuning parameters -- source of truth after the
-  // instance's first-ever tick, editable via POST /api/tqqq-weekly/config.
   const rc = data.runtimeConfig ?? {};
   document.getElementById('cfgCloseStop').textContent = fmtPct(rc.closeStopPct ?? rc.CloseStopPct);
   document.getElementById('cfgEntryDayStop').textContent = fmtPct(rc.entryDayCloseStopPct ?? rc.EntryDayCloseStopPct);
@@ -169,7 +283,6 @@ async function loadStatus() {
   const btnResume = document.getElementById('btnResume');
   const btnKill = document.getElementById('btnKill');
   btnPause.disabled = status === 'Paused' || status === 'Killed';
-  // Resume works from Killed too -- Kill is a strong stop, not a one-way door.
   btnResume.disabled = status === 'Running';
   btnKill.disabled = status === 'Killed';
 
@@ -259,6 +372,240 @@ async function confirmKill() {
   } finally {
     refresh();
   }
+}
+
+// ============ VERTICAL SPREADS ============
+
+async function loadExpirations() {
+  const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
+  if (!symbol) return;
+  const sel = document.getElementById('vsExpiration');
+  sel.innerHTML = '<option>Loading…</option>';
+  try {
+    const res = await fetch('/api/vertical-spread/expirations?symbol=' + encodeURIComponent(symbol));
+    const exps = await res.json();
+    if (!res.ok || !exps.length) { sel.innerHTML = '<option>No expirations</option>'; return; }
+    sel.innerHTML = exps.map(e => {
+      const d = e.expirationDate.substring(0, 10);
+      return `<option value="${d}">${d} (${e.daysToExpiration}d, ${e.dayOfWeek})</option>`;
+    }).join('');
+    sel.onchange = loadChainHint;
+    await loadChainHint();
+  } catch (e) {
+    sel.innerHTML = '<option>Error</option>';
+  }
+}
+
+async function loadChainHint() {
+  const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
+  const exp = document.getElementById('vsExpiration').value;
+  const right = document.getElementById('vsRight').value;
+  const hint = document.getElementById('vsChainHint');
+  const chainDiv = document.getElementById('vsChainTable');
+  if (!exp) return;
+  hint.textContent = 'Loading chain…';
+  try {
+    const res = await fetch(`/api/vertical-spread/chain?symbol=${encodeURIComponent(symbol)}&expiration=${exp}`);
+    const chain = await res.json();
+    const opts = (chain.options || []).filter(o => o.right === right).sort((a,b) => a.strike - b.strike);
+    if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; chainDiv.innerHTML = ''; return; }
+    hint.textContent = `Click a strike below to fill Short/Long, or type them directly. ${opts.length} strikes available.`;
+    chainDiv.innerHTML = `<table style="font-size:12px;max-height:220px;display:block;overflow-y:auto">
+      <thead><tr><th>Strike</th><th>Bid</th><th>Ask</th><th>Delta</th><th>OI</th><th></th></tr></thead>
+      <tbody>${opts.map(o => `<tr>
+        <td>${o.strike}</td><td>${o.bid?.toFixed(2) ?? '—'}</td><td>${o.ask?.toFixed(2) ?? '—'}</td>
+        <td>${o.delta != null ? o.delta.toFixed(2) : '—'}</td><td>${o.openInterest ?? 0}</td>
+        <td>
+          <button class="small btn-blue" onclick="document.getElementById('vsShortStrike').value=${o.strike}">Short</button>
+          <button class="small btn-muted" onclick="document.getElementById('vsLongStrike').value=${o.strike}">Long</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) {
+    hint.textContent = 'Could not load chain.';
+  }
+}
+
+function currentBuildRequest() {
+  return {
+    symbol: document.getElementById('vsSymbol').value.trim().toUpperCase(),
+    right: document.getElementById('vsRight').value,
+    expirationDate: document.getElementById('vsExpiration').value,
+    shortStrike: parseFloat(document.getElementById('vsShortStrike').value),
+    longStrike: parseFloat(document.getElementById('vsLongStrike').value),
+    contracts: parseInt(document.getElementById('vsContracts').value) || 1
+  };
+}
+
+async function previewSpread() {
+  const req = currentBuildRequest();
+  if (!req.expirationDate || isNaN(req.shortStrike) || isNaN(req.longStrike)) {
+    alert('Pick an expiration and both strikes first.');
+    return;
+  }
+  const res = await fetch('/api/vertical-spread/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
+  const body = await res.json();
+  if (!res.ok) { alert('Preview failed: ' + (body.message || res.status)); document.getElementById('btnSaveSpread').disabled = true; return; }
+
+  document.getElementById('vsPreviewBox').style.display = 'block';
+  document.getElementById('pvNetCredit').textContent = fmtMoney(body.netCredit * req.contracts * 100);
+  document.getElementById('pvMaxProfit').innerHTML = `<span class="green">${fmtMoney(body.payoff.maxProfit)}</span>`;
+  document.getElementById('pvMaxLoss').innerHTML = `<span class="red">${fmtMoney(body.payoff.maxLoss)}</span>`;
+  document.getElementById('pvBreakeven').textContent = fmtMoney(body.payoff.breakevenPrice);
+  renderPayoffChart('vsPreviewChart', body.payoff);
+  document.getElementById('btnSaveSpread').disabled = false;
+}
+
+async function saveSpread() {
+  const req = currentBuildRequest();
+  const res = await fetch('/api/vertical-spread/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
+  const body = await res.json();
+  if (!res.ok) { alert('Save failed: ' + (body.message || res.status)); return; }
+  alert('Saved as Paper strategy #' + body.id + '. It will start tracking real market data on the next job tick.');
+  document.getElementById('vsPreviewBox').style.display = 'none';
+  document.getElementById('btnSaveSpread').disabled = true;
+  loadSpreads();
+}
+
+async function loadSpreads() {
+  const res = await fetch('/api/vertical-spread/list');
+  const list = await res.json();
+  const body = document.getElementById('spreadsBody');
+  if (!res.ok || !list.length) { body.innerHTML = '<tr><td colspan="9" class="muted">No spreads saved yet.</td></tr>'; return; }
+
+  body.innerHTML = list.map(s => {
+    const netCredit = s.netCreditReceived ?? s.netCreditAtBuild;
+    let actions = `<button class="small btn-blue" onclick="viewSpread(${s.id})">View</button>`;
+    if (s.status === 'Paper') {
+      actions += ` <button class="small btn-green" onclick="deploySpread(${s.id})">Deploy</button>`;
+      actions += ` <button class="small btn-red" onclick="closeSpread(${s.id})">Close</button>`;
+    } else if (s.status === 'Live') {
+      actions += ` <button class="small btn-red" onclick="closeSpread(${s.id})">Close (LIVE)</button>`;
+    }
+    return `<tr class="clickable" onclick="viewSpread(${s.id})">
+      <td onclick="event.stopPropagation()">${s.id}</td>
+      <td>${s.symbol}</td>
+      <td>${s.spreadType}</td>
+      <td>${(s.expirationDate || '').substring(0,10)}</td>
+      <td>${s.shortStrike} / ${s.longStrike}</td>
+      <td>${s.contracts}</td>
+      <td>${fmtMoney(netCredit * s.contracts * 100)}</td>
+      <td><span class="badge ${s.status}">${s.status}</span></td>
+      <td onclick="event.stopPropagation()">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function deploySpread(id) {
+  if (!confirm(`Deploy spread #${id}? Choose OK for a SIMULATED order, or hold on -- there is no live=true button here by design; use the API directly with live=true once you've verified this on simulated first.`)) return;
+  const res = await fetch(`/api/vertical-spread/deploy/${id}?live=false`, { method: 'POST' });
+  const body = await res.json();
+  if (!res.ok) alert('Deploy failed: ' + (body.message || res.status));
+  else alert('Deploy result: ' + (body.success ? 'filled' : 'not filled'));
+  loadSpreads();
+}
+
+async function closeSpread(id) {
+  const reason = prompt('Reason for closing (optional):', 'Manually closed');
+  if (reason === null) return;
+  const res = await fetch(`/api/vertical-spread/close/${id}?live=false&reason=${encodeURIComponent(reason || '')}`, { method: 'POST' });
+  const body = await res.json();
+  if (!res.ok) alert('Close failed: ' + (body.message || res.status));
+  loadSpreads();
+  if (document.getElementById('detailPanel').dataset.id == id) viewSpread(id);
+}
+
+async function viewSpread(id) {
+  const panel = document.getElementById('detailPanel');
+  panel.style.display = 'block';
+  panel.dataset.id = id;
+  panel.scrollIntoView({ behavior: 'smooth' });
+
+  const [strategyRes, payoffRes, marksRes] = await Promise.all([
+    fetch(`/api/vertical-spread/${id}`),
+    fetch(`/api/vertical-spread/${id}/payoff`),
+    fetch(`/api/vertical-spread/${id}/marks?limit=200`)
+  ]);
+  const strategy = await strategyRes.json();
+  const payoff = await payoffRes.json();
+  const marks = await marksRes.json();
+
+  document.getElementById('detailTitle').textContent =
+    `Spread #${id} — ${strategy.symbol} ${strategy.spreadType} ${strategy.shortStrike}/${strategy.longStrike} exp ${(strategy.expirationDate||'').substring(0,10)} (${strategy.status})`;
+  document.getElementById('dtSpot').textContent = fmtMoney(payoff.currentUnderlyingPrice);
+  document.getElementById('dtMaxProfit').innerHTML = `<span class="green">${fmtMoney(payoff.maxProfit)}</span>`;
+  document.getElementById('dtMaxLoss').innerHTML = `<span class="red">${fmtMoney(payoff.maxLoss)}</span>`;
+  document.getElementById('dtBreakeven').textContent = fmtMoney(payoff.breakevenPrice);
+  const markPnl = payoff.currentMarkPnL;
+  document.getElementById('dtMarkPnl').innerHTML = markPnl != null ? `<span class="${pnlClass(markPnl)}">${fmtMoney(markPnl)}</span>` : '—';
+
+  renderPayoffChart('detailPayoffChart', payoff);
+  renderEquityChart('detailEquityChart', marks);
+}
+
+// ---- Lightweight inline-SVG chart rendering (no external chart library) ----
+
+function renderPayoffChart(containerId, payoff) {
+  const w = 680, h = 300, padL = 60, padR = 20, padT = 20, padB = 30;
+  const atExp = payoff.atExpiration || [];
+  const today = payoff.today || [];
+  const allPts = atExp.concat(today);
+  if (!allPts.length) { document.getElementById(containerId).innerHTML = '<div class="muted">No payoff data.</div>'; return; }
+
+  const xs = allPts.map(p => p.underlyingPrice);
+  const ys = allPts.map(p => p.pnL ?? p.pnl).concat([0, payoff.maxProfit, payoff.maxLoss]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const xSpan = (xMax - xMin) || 1, ySpan = (yMax - yMin) || 1;
+
+  const xScale = x => padL + (x - xMin) / xSpan * (w - padL - padR);
+  const yScale = y => h - padB - (y - yMin) / ySpan * (h - padT - padB);
+
+  const pathFor = pts => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xScale(p.underlyingPrice).toFixed(1)},${yScale(p.pnL ?? p.pnl).toFixed(1)}`).join(' ');
+
+  const zeroY = yScale(0);
+  const spotX = xScale(payoff.currentUnderlyingPrice);
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible">`;
+  svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#2a2e38" stroke-dasharray="4,3"/>`;
+  svg += `<text x="${padL-8}" y="${zeroY.toFixed(1)}" fill="#8b93a1" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>`;
+  if (spotX >= padL && spotX <= w - padR) {
+    svg += `<line x1="${spotX.toFixed(1)}" y1="${padT}" x2="${spotX.toFixed(1)}" y2="${h-padB}" stroke="#4f8ef7" stroke-dasharray="4,3"/>`;
+    svg += `<text x="${spotX.toFixed(1)}" y="${padT-4}" fill="#4f8ef7" font-size="10" text-anchor="middle">${payoff.currentUnderlyingPrice.toFixed(2)}</text>`;
+  }
+  svg += `<path d="${pathFor(atExp)}" fill="none" stroke="#8b93a1" stroke-width="2"/>`;
+  svg += `<path d="${pathFor(today)}" fill="none" stroke="#e0a93f" stroke-width="2"/>`;
+  const markPnl = payoff.currentMarkPnL;
+  if (markPnl !== null && markPnl !== undefined && spotX >= padL && spotX <= w - padR) {
+    svg += `<circle cx="${spotX.toFixed(1)}" cy="${yScale(markPnl).toFixed(1)}" r="5" fill="#35c98f" stroke="#0f1115" stroke-width="1.5"/>`;
+  }
+  svg += `<text x="${padL}" y="${h-8}" fill="#8b93a1" font-size="10">${xMin.toFixed(2)}</text>`;
+  svg += `<text x="${w-padR}" y="${h-8}" fill="#8b93a1" font-size="10" text-anchor="end">${xMax.toFixed(2)}</text>`;
+  svg += `</svg>`;
+  document.getElementById(containerId).innerHTML = svg;
+}
+
+function renderEquityChart(containerId, marks) {
+  const el = document.getElementById(containerId);
+  if (!marks || !marks.length) { el.innerHTML = '<div class="muted">No marks recorded yet.</div>'; return; }
+
+  const w = 680, h = 180, padL = 60, padR = 20, padT = 15, padB = 25;
+  const ys = marks.map(m => m.unrealizedPnL ?? 0);
+  const yMin = Math.min(0, ...ys), yMax = Math.max(0, ...ys);
+  const ySpan = (yMax - yMin) || 1;
+  const xScale = i => padL + (marks.length === 1 ? 0 : i / (marks.length - 1) * (w - padL - padR));
+  const yScale = y => h - padB - (y - yMin) / ySpan * (h - padT - padB);
+  const zeroY = yScale(0);
+
+  const path = marks.map((m, i) => `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(m.unrealizedPnL ?? 0).toFixed(1)}`).join(' ');
+  const last = marks[marks.length - 1];
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#2a2e38" stroke-dasharray="4,3"/>`;
+  svg += `<path d="${path}" fill="none" stroke="${(last.unrealizedPnL ?? 0) >= 0 ? '#35c98f' : '#e5566d'}" stroke-width="2"/>`;
+  svg += `<text x="${padL}" y="${h-6}" fill="#8b93a1" font-size="10">${new Date(marks[0].markUtc).toLocaleDateString()}</text>`;
+  svg += `<text x="${w-padR}" y="${h-6}" fill="#8b93a1" font-size="10" text-anchor="end">${new Date(last.markUtc).toLocaleDateString()}</text>`;
+  svg += `</svg>`;
+  el.innerHTML = svg;
 }
 
 refresh();

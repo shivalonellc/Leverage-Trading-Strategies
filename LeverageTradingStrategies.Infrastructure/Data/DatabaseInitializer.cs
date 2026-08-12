@@ -89,6 +89,71 @@ namespace LeverageTradingStrategies.Infrastructure.Data
                 UpdatedUtc TEXT NOT NULL,
                 PRIMARY KEY (StrategyInstanceId, Key)
             );
+
+            CREATE TABLE IF NOT EXISTS VerticalSpreadStrategies (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Symbol TEXT NOT NULL,
+                SpreadType TEXT NOT NULL,
+                OptionRight TEXT NOT NULL,
+                ExpirationDate TEXT NOT NULL,
+                ShortStrike REAL NOT NULL,
+                LongStrike REAL NOT NULL,
+                ShortOptionSymbol TEXT NOT NULL,
+                LongOptionSymbol TEXT NOT NULL,
+                Contracts INTEGER NOT NULL,
+                ShortDeltaAtBuild REAL NULL,
+                LongDeltaAtBuild REAL NULL,
+                NetCreditAtBuild REAL NOT NULL,
+                MaxRiskPerSpread REAL NOT NULL,
+                Status TEXT NOT NULL DEFAULT 'Paper',
+                NetCreditReceived REAL NULL,
+                OpenedUtc TEXT NOT NULL,
+                DeployedUtc TEXT NULL,
+                ClosedUtc TEXT NULL,
+                RealizedPnL REAL NULL,
+                CloseReason TEXT NULL,
+                CreatedUtc TEXT NOT NULL,
+                UpdatedUtc TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_VerticalSpreadStrategies_Status ON VerticalSpreadStrategies (Status);
+
+            CREATE TABLE IF NOT EXISTS VerticalSpreadOrders (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                VerticalSpreadStrategyId INTEGER NOT NULL REFERENCES VerticalSpreadStrategies(Id),
+                ActionType TEXT NOT NULL,
+                LongOptionSymbol TEXT NOT NULL,
+                ShortOptionSymbol TEXT NOT NULL,
+                Contracts INTEGER NOT NULL,
+                RequestedPrice REAL NOT NULL,
+                FillPrice REAL NULL,
+                Status TEXT NOT NULL,
+                BrokerOrderId TEXT NULL,
+                ErrorMessage TEXT NULL,
+                SubmittedUtc TEXT NOT NULL,
+                FilledUtc TEXT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_VerticalSpreadOrders_StrategyId_SubmittedUtc
+                ON VerticalSpreadOrders (VerticalSpreadStrategyId, SubmittedUtc DESC);
+
+            CREATE TABLE IF NOT EXISTS VerticalSpreadMarks (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                VerticalSpreadStrategyId INTEGER NOT NULL REFERENCES VerticalSpreadStrategies(Id),
+                MarkUtc TEXT NOT NULL,
+                UnderlyingPrice REAL NOT NULL,
+                ShortMid REAL NOT NULL,
+                LongMid REAL NOT NULL,
+                SpreadMarkPrice REAL NOT NULL,
+                UnrealizedPnL REAL NOT NULL,
+                ShortDelta REAL NULL,
+                LongDelta REAL NULL,
+                NetDelta REAL NULL,
+                DaysToExpiration INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_VerticalSpreadMarks_StrategyId_MarkUtc
+                ON VerticalSpreadMarks (VerticalSpreadStrategyId, MarkUtc DESC);
             """;
 
         public void EnsureCreated()

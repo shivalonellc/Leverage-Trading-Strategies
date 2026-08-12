@@ -82,3 +82,77 @@ CREATE TABLE IF NOT EXISTS StrategyConfig (
     UpdatedUtc TEXT NOT NULL,
     PRIMARY KEY (StrategyInstanceId, Key)
 );
+
+-- Vertical credit spreads (manually built in the dashboard: symbol, expiration, strikes) get
+-- their OWN table family rather than reusing StrategyInstances/StrategyOrders above -- several
+-- concurrent spreads on the same underlying at different strikes/expirations is the NORMAL case
+-- here, which conflicts with StrategyInstances' UNIQUE(StrategyType, Symbol); and a combo
+-- order's two legs don't fit StrategyOrders' single-symbol/single-side shape.
+CREATE TABLE IF NOT EXISTS VerticalSpreadStrategies (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Symbol TEXT NOT NULL,                  -- underlying, e.g. TQQQ
+    SpreadType TEXT NOT NULL,              -- BullPutCredit | BearCallCredit
+    OptionRight TEXT NOT NULL,             -- Put | Call
+    ExpirationDate TEXT NOT NULL,          -- yyyy-MM-dd
+    ShortStrike REAL NOT NULL,
+    LongStrike REAL NOT NULL,
+    ShortOptionSymbol TEXT NOT NULL,       -- OCC symbol
+    LongOptionSymbol TEXT NOT NULL,
+    Contracts INTEGER NOT NULL,
+    ShortDeltaAtBuild REAL NULL,
+    LongDeltaAtBuild REAL NULL,
+    NetCreditAtBuild REAL NOT NULL,        -- per-spread credit priced off live bid/ask when built/saved
+    MaxRiskPerSpread REAL NOT NULL,        -- (Width - NetCreditAtBuild) * 100, informational
+    Status TEXT NOT NULL DEFAULT 'Paper',  -- Paper | Live | Closed | Failed
+    NetCreditReceived REAL NULL,           -- actual combo-order fill once Live; equals NetCreditAtBuild while Paper
+    OpenedUtc TEXT NOT NULL,               -- when Saved -- start of paper tracking
+    DeployedUtc TEXT NULL,                 -- when the real Schwab combo order confirmed filled
+    ClosedUtc TEXT NULL,
+    RealizedPnL REAL NULL,
+    CloseReason TEXT NULL,
+    CreatedUtc TEXT NOT NULL,
+    UpdatedUtc TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS IX_VerticalSpreadStrategies_Status ON VerticalSpreadStrategies (Status);
+
+-- Order audit trail for the real broker-facing actions on a spread (open/close combo order) --
+-- mirrors StrategyOrders' Submitted->Filled/Failed shape but scoped to a 2-leg combo order.
+CREATE TABLE IF NOT EXISTS VerticalSpreadOrders (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    VerticalSpreadStrategyId INTEGER NOT NULL REFERENCES VerticalSpreadStrategies(Id),
+    ActionType TEXT NOT NULL,              -- Open | Close
+    LongOptionSymbol TEXT NOT NULL,
+    ShortOptionSymbol TEXT NOT NULL,
+    Contracts INTEGER NOT NULL,
+    RequestedPrice REAL NOT NULL,          -- limit net credit (Open) / net debit (Close) sent to the broker
+    FillPrice REAL NULL,
+    Status TEXT NOT NULL,                  -- Submitted | Filled | Rejected | Failed
+    BrokerOrderId TEXT NULL,
+    ErrorMessage TEXT NULL,
+    SubmittedUtc TEXT NOT NULL,
+    FilledUtc TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS IX_VerticalSpreadOrders_StrategyId_SubmittedUtc
+    ON VerticalSpreadOrders (VerticalSpreadStrategyId, SubmittedUtc DESC);
+
+-- Periodic mark-to-market snapshots (Paper AND Live) -- feeds the time-series P&L chart and lets
+-- the marking job detect expiration without re-deriving history each tick.
+CREATE TABLE IF NOT EXISTS VerticalSpreadMarks (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    VerticalSpreadStrategyId INTEGER NOT NULL REFERENCES VerticalSpreadStrategies(Id),
+    MarkUtc TEXT NOT NULL,
+    UnderlyingPrice REAL NOT NULL,
+    ShortMid REAL NOT NULL,
+    LongMid REAL NOT NULL,
+    SpreadMarkPrice REAL NOT NULL,         -- ShortMid - LongMid: current cost to close
+    UnrealizedPnL REAL NOT NULL,
+    ShortDelta REAL NULL,
+    LongDelta REAL NULL,
+    NetDelta REAL NULL,
+    DaysToExpiration INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS IX_VerticalSpreadMarks_StrategyId_MarkUtc
+    ON VerticalSpreadMarks (VerticalSpreadStrategyId, MarkUtc DESC);
