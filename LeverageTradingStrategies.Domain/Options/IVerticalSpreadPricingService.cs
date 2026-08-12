@@ -22,6 +22,15 @@ namespace LeverageTradingStrategies.Domain.Options
         public decimal BreakevenPrice { get; set; }
         public decimal CurrentUnderlyingPrice { get; set; }
         public decimal? CurrentMarkPnL { get; set; }        // actual mark P&L at the current spot, from real bid/ask (not the theoretical curve)
+
+        /// <summary>Rough probability-of-profit estimate: 1 - |short leg delta|. Delta
+        /// approximates the risk-neutral probability an option finishes in-the-money, and for a
+        /// simple 2-leg credit spread "profit" is closely approximated by "short leg finishes
+        /// OTM" — the same shorthand OptionStrat and most retail options tools use. Not a
+        /// precise probability (ignores the long leg and the exact breakeven vs. short strike
+        /// gap), just a fast, good-enough-for-a-stats-row estimate. Null if no delta was
+        /// available for the short leg.</summary>
+        public decimal? ProbabilityOfProfit { get; set; }
     }
 
     public interface IVerticalSpreadPricingService
@@ -29,11 +38,13 @@ namespace LeverageTradingStrategies.Domain.Options
         /// <summary>Builds both payoff curves across a price range centered on the current
         /// underlying price. impliedVolatility should be the average of the two legs' IV off
         /// the live chain (or a single leg's IV if only one is available) — used only for the
-        /// "Today" curve; the AtExpiration curve is pure intrinsic value and doesn't need it.</summary>
+        /// "Today" curve; the AtExpiration curve is pure intrinsic value and doesn't need it.
+        /// shortLegDelta (signed, as reported by the chain) feeds the ProbabilityOfProfit
+        /// estimate — pass null to omit it.</summary>
         VerticalSpreadPayoff BuildPayoff(
             OptionRight right, decimal shortStrike, decimal longStrike, decimal netCredit, int contracts,
             decimal underlyingPrice, double yearsToExpiry, double impliedVolatility,
-            decimal? currentMarkPnL = null, double riskFreeRate = 0.04);
+            decimal? currentMarkPnL = null, decimal? shortLegDelta = null, double riskFreeRate = 0.04);
 
         /// <summary>Current cost to close (short leg mid minus long leg mid), the resulting
         /// unrealized P&amp;L against netCreditReceived, and the position's net delta (long leg

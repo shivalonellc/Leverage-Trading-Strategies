@@ -20,7 +20,7 @@ namespace LeverageTradingStrategies.Domain.Options
         public VerticalSpreadPayoff BuildPayoff(
             OptionRight right, decimal shortStrike, decimal longStrike, decimal netCredit, int contracts,
             decimal underlyingPrice, double yearsToExpiry, double impliedVolatility,
-            decimal? currentMarkPnL = null, double riskFreeRate = 0.04)
+            decimal? currentMarkPnL = null, decimal? shortLegDelta = null, double riskFreeRate = 0.04)
         {
             decimal width = Math.Abs(shortStrike - longStrike);
             decimal maxProfit = netCredit * contracts * 100m;
@@ -55,7 +55,8 @@ namespace LeverageTradingStrategies.Domain.Options
                 MaxLoss = maxLoss,
                 BreakevenPrice = breakeven,
                 CurrentUnderlyingPrice = underlyingPrice,
-                CurrentMarkPnL = currentMarkPnL
+                CurrentMarkPnL = currentMarkPnL,
+                ProbabilityOfProfit = shortLegDelta.HasValue ? Math.Clamp(1m - Math.Abs(shortLegDelta.Value), 0m, 1m) : null
             };
         }
 

@@ -85,7 +85,7 @@ builder.Services.AddScoped<TradierClient>(sp =>
     new TradierClient(
         builder.Configuration["AppSettings:Tradier:Token"],
         builder.Configuration["AppSettings:Tradier:AccountId"],
-        builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox")));
+        builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox")?false:true));
 builder.Services.AddScoped<ITradierOptionsProvider, TradierOptionsProvider>();
 
 // --- Vertical credit spread module ---

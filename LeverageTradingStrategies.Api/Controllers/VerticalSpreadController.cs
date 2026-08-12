@@ -225,11 +225,13 @@ namespace LeverageTradingStrategies.Api.Controllers
             decimal underlyingPrice = quote?.LastPrice ?? 0m;
 
             decimal? currentMarkPnL = null;
+            decimal? shortDelta = null;
             double iv = 0.30; // sane fallback if the chain has no usable IV right now (e.g. after hours)
             if (shortLeg != null && longLeg != null)
             {
                 var (_, unrealizedPnL, _) = _pricingService.ComputeMark(shortLeg, longLeg, strategy.NetCreditReceived ?? strategy.NetCreditAtBuild, strategy.Contracts);
                 currentMarkPnL = unrealizedPnL;
+                shortDelta = shortLeg.Delta;
                 double avgIv = (double)(((shortLeg.ImpliedVolatility ?? 0m) + (longLeg.ImpliedVolatility ?? 0m)) / 2m);
                 if (avgIv > 0) iv = avgIv;
             }
@@ -238,9 +240,75 @@ namespace LeverageTradingStrategies.Api.Controllers
             var payoff = _pricingService.BuildPayoff(
                 strategy.Right, strategy.ShortStrike, strategy.LongStrike,
                 strategy.NetCreditReceived ?? strategy.NetCreditAtBuild, strategy.Contracts,
-                underlyingPrice, yearsToExpiry, iv, currentMarkPnL);
+                underlyingPrice, yearsToExpiry, iv, currentMarkPnL, shortDelta);
 
             return Ok(payoff);
+        }
+
+        /// <summary>A series of "Today" curves at evenly-spaced dates between now and
+        /// expiration (plus the single invariant AtExpiration curve), so the dashboard's
+        /// time-decay slider can scrub smoothly without re-fetching on every drag frame —
+        /// mirrors OptionStrat's "as-of date" slider. steps defaults to 8 (roughly a curve
+        /// every DTE/8 days for a short-dated spread, coarser for a longer-dated one).</summary>
+        [HttpGet("{id}/payoff-timeline")]
+        public async Task<IActionResult> GetPayoffTimeline(long id, [FromQuery] int steps = 8, CancellationToken ct = default)
+        {
+            var strategy = await _repository.GetByIdAsync(id, ct);
+            if (strategy == null) return NotFound();
+            steps = Math.Clamp(steps, 2, 30);
+
+            var chain = await _optionsProvider.GetOptionChainAsync(strategy.Symbol, strategy.ExpirationDate, ct);
+            var shortLeg = chain.Options.FirstOrDefault(o => o.Symbol == strategy.ShortOptionSymbol);
+            var longLeg = chain.Options.FirstOrDefault(o => o.Symbol == strategy.LongOptionSymbol);
+            var quote = await _quoteProvider.GetQuoteAsync(strategy.Symbol, ct);
+            decimal underlyingPrice = quote?.LastPrice ?? 0m;
+
+            decimal? currentMarkPnL = null;
+            decimal? shortDelta = null;
+            double iv = 0.30;
+            if (shortLeg != null && longLeg != null)
+            {
+                var (_, unrealizedPnL, _) = _pricingService.ComputeMark(shortLeg, longLeg, strategy.NetCreditReceived ?? strategy.NetCreditAtBuild, strategy.Contracts);
+                currentMarkPnL = unrealizedPnL;
+                shortDelta = shortLeg.Delta;
+                double avgIv = (double)(((shortLeg.ImpliedVolatility ?? 0m) + (longLeg.ImpliedVolatility ?? 0m)) / 2m);
+                if (avgIv > 0) iv = avgIv;
+            }
+
+            var today = DateTime.UtcNow.Date;
+            var expiration = strategy.ExpirationDate.Date;
+            double totalDays = Math.Max(0.0, (expiration - today).TotalDays);
+            decimal netCredit = strategy.NetCreditReceived ?? strategy.NetCreditAtBuild;
+
+            var timelineSteps = new List<object>();
+            VerticalSpreadPayoff? last = null;
+            for (int i = 0; i < steps; i++)
+            {
+                var asOfDate = today.AddDays(totalDays * i / (steps - 1));
+                double yearsToExpiry = Math.Max(0.0, (expiration - asOfDate).TotalDays) / 365.0;
+                var stepPayoff = _pricingService.BuildPayoff(
+                    strategy.Right, strategy.ShortStrike, strategy.LongStrike, netCredit, strategy.Contracts,
+                    underlyingPrice, yearsToExpiry, iv, currentMarkPnL, shortDelta);
+                last = stepPayoff;
+                timelineSteps.Add(new
+                {
+                    asOfDate,
+                    daysToExpiration = Math.Max(0, (int)Math.Round((expiration - asOfDate).TotalDays)),
+                    curve = stepPayoff.Today
+                });
+            }
+
+            return Ok(new
+            {
+                atExpiration = last?.AtExpiration ?? new List<PayoffPoint>(),
+                maxProfit = last?.MaxProfit ?? 0m,
+                maxLoss = last?.MaxLoss ?? 0m,
+                breakevenPrice = last?.BreakevenPrice ?? 0m,
+                currentUnderlyingPrice = underlyingPrice,
+                currentMarkPnL,
+                probabilityOfProfit = last?.ProbabilityOfProfit,
+                steps = timelineSteps
+            });
         }
 
         private async Task<SpreadBuildResult> BuildCandidateAsync(BuildSpreadRequest request, CancellationToken ct)
@@ -289,7 +357,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             double iv = (double)(((shortLeg.ImpliedVolatility ?? 0m) + (longLeg.ImpliedVolatility ?? 0m)) / 2m);
             if (iv <= 0) iv = 0.30;
 
-            var payoff = _pricingService.BuildPayoff(right, request.ShortStrike, request.LongStrike, netCredit, request.Contracts, underlyingPrice, yearsToExpiry, iv);
+            var payoff = _pricingService.BuildPayoff(right, request.ShortStrike, request.LongStrike, netCredit, request.Contracts, underlyingPrice, yearsToExpiry, iv, currentMarkPnL: null, shortLegDelta: shortLeg.Delta);
 
             return SpreadBuildResult.Ok(shortLeg, longLeg, spreadType, netCredit, maxRisk, payoff);
         }
