@@ -65,6 +65,28 @@ namespace LeverageTradingStrategies.Api.Controllers
             return Ok(await _optionsProvider.GetExpirationsAsync(symbol, ct));
         }
 
+        /// <summary>Lightweight quote (last price + day change) for the builder's header ticker
+        /// -- real Schwab spot, same source everything else in this module uses.</summary>
+        [HttpGet("quote")]
+        public async Task<IActionResult> GetQuote([FromQuery] string symbol, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(symbol)) return BadRequest(new { message = "symbol is required" });
+            var quote = await _quoteProvider.GetQuoteAsync(symbol.Trim().ToUpperInvariant(), ct);
+            if (quote == null) return NotFound(new { message = $"No quote available for {symbol}." });
+
+            decimal change = quote.LastPrice - quote.PreviousClosePrice;
+            decimal? changePercent = quote.PreviousClosePrice != 0 ? change / quote.PreviousClosePrice : null;
+            return Ok(new
+            {
+                quote.Symbol,
+                lastPrice = quote.LastPrice,
+                previousClosePrice = quote.PreviousClosePrice,
+                change,
+                changePercent,
+                quote.AsOfUtc
+            });
+        }
+
         [HttpGet("chain")]
         public async Task<IActionResult> GetChain([FromQuery] string symbol, [FromQuery] DateTime expiration, CancellationToken ct)
         {
@@ -76,9 +98,9 @@ namespace LeverageTradingStrategies.Api.Controllers
         /// <summary>Prices a candidate spread off the live chain and returns the payoff curves —
         /// no persistence, safe to call as the user adjusts strikes in the builder UI.</summary>
         [HttpPost("preview")]
-        public async Task<IActionResult> Preview([FromBody] BuildSpreadRequest request, CancellationToken ct)
+        public async Task<IActionResult> Preview([FromBody] BuildSpreadRequest request, [FromQuery] double ivMultiplier = 1.0, CancellationToken ct = default)
         {
-            var result = await BuildCandidateAsync(request, ct);
+            var result = await BuildCandidateAsync(request, ct, ivMultiplier);
             if (!result.Success) return BadRequest(new { message = result.Error });
 
             return Ok(new
@@ -251,11 +273,12 @@ namespace LeverageTradingStrategies.Api.Controllers
         /// mirrors OptionStrat's "as-of date" slider. steps defaults to 8 (roughly a curve
         /// every DTE/8 days for a short-dated spread, coarser for a longer-dated one).</summary>
         [HttpGet("{id}/payoff-timeline")]
-        public async Task<IActionResult> GetPayoffTimeline(long id, [FromQuery] int steps = 8, CancellationToken ct = default)
+        public async Task<IActionResult> GetPayoffTimeline(long id, [FromQuery] int steps = 8, [FromQuery] double ivMultiplier = 1.0, CancellationToken ct = default)
         {
             var strategy = await _repository.GetByIdAsync(id, ct);
             if (strategy == null) return NotFound();
             steps = Math.Clamp(steps, 2, 30);
+            ivMultiplier = Math.Clamp(ivMultiplier, 0.1, 5.0); // "what-if" IV slider -- 1.0 = live chain IV, unchanged
 
             var chain = await _optionsProvider.GetOptionChainAsync(strategy.Symbol, strategy.ExpirationDate, ct);
             var shortLeg = chain.Options.FirstOrDefault(o => o.Symbol == strategy.ShortOptionSymbol);
@@ -274,6 +297,7 @@ namespace LeverageTradingStrategies.Api.Controllers
                 double avgIv = (double)(((shortLeg.ImpliedVolatility ?? 0m) + (longLeg.ImpliedVolatility ?? 0m)) / 2m);
                 if (avgIv > 0) iv = avgIv;
             }
+            iv *= ivMultiplier;
 
             var today = DateTime.UtcNow.Date;
             var expiration = strategy.ExpirationDate.Date;
@@ -311,7 +335,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             });
         }
 
-        private async Task<SpreadBuildResult> BuildCandidateAsync(BuildSpreadRequest request, CancellationToken ct)
+        private async Task<SpreadBuildResult> BuildCandidateAsync(BuildSpreadRequest request, CancellationToken ct, double ivMultiplier = 1.0)
         {
             if (string.IsNullOrWhiteSpace(request.Symbol))
                 return SpreadBuildResult.Fail("Symbol is required.");
@@ -356,6 +380,7 @@ namespace LeverageTradingStrategies.Api.Controllers
             double yearsToExpiry = Math.Max(0.0, (request.ExpirationDate.Date - DateTime.UtcNow.Date).TotalDays) / 365.0;
             double iv = (double)(((shortLeg.ImpliedVolatility ?? 0m) + (longLeg.ImpliedVolatility ?? 0m)) / 2m);
             if (iv <= 0) iv = 0.30;
+            iv *= Math.Clamp(ivMultiplier, 0.1, 5.0); // "what-if" IV slider on the builder UI -- 1.0 = live chain IV, unchanged
 
             var payoff = _pricingService.BuildPayoff(right, request.ShortStrike, request.LongStrike, netCredit, request.Contracts, underlyingPrice, yearsToExpiry, iv, currentMarkPnL: null, shortLegDelta: shortLeg.Delta);
 

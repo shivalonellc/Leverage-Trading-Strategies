@@ -75,6 +75,44 @@
   .slider-row input[type=range] { flex: 1; accent-color: var(--blue); }
   .slider-label { font-size: 12px; color: var(--muted); min-width: 190px; text-align: right; white-space: nowrap; }
   .pop-note { font-size: 10px; color: var(--muted); }
+
+  /* ---- OptionStrat-style builder chrome ---- */
+  .ticker-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .ticker-symbol input { background: #0f1115; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 15px; font-weight: 700; width: 100px; text-transform: uppercase; }
+  .ticker-price { font-size: 22px; font-weight: 700; }
+  .ticker-change { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+  .ticker-change.green { background: rgba(53,201,143,.15); color: var(--green); }
+  .ticker-change.red { background: rgba(229,86,109,.15); color: var(--red); }
+  .ticker-badge { font-size: 11px; color: var(--muted); background: rgba(139,147,161,.12); padding: 3px 8px; border-radius: 999px; }
+  .ticker-refresh { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; }
+
+  .exp-block { margin-bottom: 14px; }
+  .exp-block .block-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .exp-months, .exp-days { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .exp-btn { background: #0f1115; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .exp-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .exp-btn:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+
+  .strike-block { margin-bottom: 14px; }
+  .strike-block .block-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .leg-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+  .leg-btn { background: #0f1115; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .leg-btn.active.short { border-color: var(--amber); color: var(--amber); background: rgba(224,169,63,.12); }
+  .leg-btn.active.long { border-color: var(--blue); color: var(--blue); background: rgba(79,142,247,.12); }
+  #vsStrikeRuler { height: 90px; cursor: pointer; }
+
+  .stats-strip { display: flex; gap: 0; margin: 14px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+  .stats-strip .sitem { flex: 1; min-width: 130px; padding: 10px 14px; border-right: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .stats-strip .sitem:last-child { border-right: none; }
+  .stats-strip .sicon { width: 16px; height: 16px; flex-shrink: 0; opacity: .8; }
+  .stats-strip .sk { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .stats-strip .sv { font-size: 15px; font-weight: 700; }
+
+  .range-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+  .range-row .rlabel { font-size: 11px; color: var(--muted); min-width: 150px; }
+  .range-row input[type=range] { flex: 1; accent-color: var(--blue); }
+  .range-row .rval { font-size: 12px; color: var(--text); min-width: 40px; text-align: right; }
+  .range-reset { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -159,38 +197,62 @@
   <div class="tabpanel" id="tab-spreads">
     <div class="panel">
       <h2>Build a Vertical Credit Spread</h2>
-      <div class="form-row">
-        <div class="form-field"><label>Symbol</label><input id="vsSymbol" value="TQQQ" onchange="loadExpirations()"></div>
-        <div class="form-field"><label>Right</label>
-          <select id="vsRight" onchange="loadExpirations()">
+
+      <div class="ticker-row">
+        <div class="ticker-symbol"><input id="vsSymbol" value="TQQQ" onchange="onSymbolChange()"></div>
+        <div class="ticker-price" id="vsTickerPrice">—</div>
+        <div class="ticker-change" id="vsTickerChange"></div>
+        <span class="ticker-badge">Delayed</span>
+        <button class="ticker-refresh" onclick="loadTicker()" title="Refresh quote">&#8635;</button>
+        <div class="form-field" style="margin-left:auto"><label>Right</label>
+          <select id="vsRight" onchange="onRightChange()">
             <option value="Put">Put (Bull Put Credit)</option>
             <option value="Call">Call (Bear Call Credit)</option>
           </select>
         </div>
-        <div class="form-field"><label>Expiration</label><select id="vsExpiration"></select></div>
-        <div class="form-field"><label>Short Strike</label><input id="vsShortStrike" type="number" step="0.5"></div>
-        <div class="form-field"><label>Long Strike</label><input id="vsLongStrike" type="number" step="0.5"></div>
-        <div class="form-field"><label>Contracts</label><input id="vsContracts" type="number" value="1" min="1" style="width:70px"></div>
-        <button class="btn-blue" onclick="previewSpread()">Preview</button>
-        <button class="btn-green" id="btnSaveSpread" onclick="saveSpread()" disabled>Save (Paper)</button>
+        <div class="form-field"><label>Contracts</label><input id="vsContracts" type="number" value="1" min="1" style="width:70px" onchange="previewSpread()"></div>
       </div>
-      <div class="muted" id="vsChainHint" style="font-size:12px">Pick an expiration to see available strikes below.</div>
-      <div id="vsChainTable"></div>
-      <div id="vsPreviewBox" style="display:none">
-        <div class="payoff-stats">
-          <div class="stat"><div class="k">Net Credit</div><div id="pvNetCredit">—</div></div>
-          <div class="stat"><div class="k">Max Profit</div><div id="pvMaxProfit">—</div></div>
-          <div class="stat"><div class="k">Max Loss</div><div id="pvMaxLoss">—</div></div>
-          <div class="stat"><div class="k">Breakeven</div><div id="pvBreakeven">—</div></div>
-          <div class="stat"><div class="k">Prob. of Profit</div><div id="pvPop">—</div><div class="pop-note">delta approx.</div></div>
+
+      <div class="exp-block">
+        <div class="block-label">Expiration <span id="vsExpDteLabel" class="muted"></span></div>
+        <div class="exp-months" id="vsExpMonths"><span class="muted">Loading…</span></div>
+        <div class="exp-days" id="vsExpDays"></div>
+      </div>
+
+      <div class="strike-block">
+        <div class="block-label">Strikes</div>
+        <div class="leg-toggle">
+          <button class="leg-btn short active" id="legBtnShort" onclick="setActiveLeg('short')">A &middot; Short (sell) <span id="legShortVal">—</span></button>
+          <button class="leg-btn long" id="legBtnLong" onclick="setActiveLeg('long')">B &middot; Long (buy) <span id="legLongVal">—</span></button>
+          <div class="form-field" style="margin-left:auto"><label>Short</label><input id="vsShortStrike" type="number" step="0.5" style="width:90px" onchange="onStrikeInputChange()"></div>
+          <div class="form-field"><label>Long</label><input id="vsLongStrike" type="number" step="0.5" style="width:90px" onchange="onStrikeInputChange()"></div>
         </div>
+        <div class="chart-container" id="vsStrikeRuler"></div>
+        <div class="muted" id="vsChainHint" style="font-size:12px;margin-top:4px">Pick an expiration to load strikes.</div>
+      </div>
+
+      <div id="vsPreviewBox" style="display:none">
+        <div class="stats-strip" id="vsStatsStrip"></div>
         <div class="chart-container" id="vsPreviewChart"></div>
+        <div class="slider-row">
+          <span class="muted" style="font-size:11px">Today</span>
+          <input type="range" id="vsDateSlider" min="0" max="100" value="100" oninput="onVsDateSliderChange(this.value)">
+          <span class="muted" style="font-size:11px">Expiration</span>
+          <span class="slider-label" id="vsSliderLabel">At expiration</span>
+        </div>
+        <div class="range-row">
+          <span class="rlabel">RANGE &plusmn;<span id="vsRangeVal">25</span>%</span>
+          <input type="range" id="vsRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('vs')">
+          <button class="range-reset" onclick="resetRange('vs')" title="Reset">&#8634;</button>
+        </div>
         <div class="legend">
           <span><span class="dot" style="background:#e0a93f">A</span>Short strike (sold)</span>
           <span><span class="dot" style="background:#4f8ef7">B</span>Long strike (bought)</span>
-          <span><span class="sw" style="background:#35c98f"></span>Today (profit)</span>
-          <span><span class="sw" style="background:#e5566d"></span>Today (loss)</span>
-          <span><span class="sw" style="background:#8b93a1;border-top:1px dashed #8b93a1;height:0"></span>At expiration</span>
+          <span><span class="sw" style="background:#35c98f"></span>Profit</span>
+          <span><span class="sw" style="background:#e5566d"></span>Loss</span>
+        </div>
+        <div class="controls" style="margin-top:10px">
+          <button class="btn-green" id="btnSaveSpread" onclick="saveSpread()" disabled>Save (Paper)</button>
         </div>
       </div>
     </div>
@@ -209,27 +271,24 @@
 
     <div class="panel" id="detailPanel">
       <h2 id="detailTitle">Spread Detail</h2>
-      <div class="payoff-stats">
-        <div class="stat"><div class="k">Current Spot</div><div id="dtSpot">—</div></div>
-        <div class="stat"><div class="k">Max Profit</div><div id="dtMaxProfit">—</div></div>
-        <div class="stat"><div class="k">Max Loss</div><div id="dtMaxLoss">—</div></div>
-        <div class="stat"><div class="k">Breakeven</div><div id="dtBreakeven">—</div></div>
-        <div class="stat"><div class="k">Current Mark P&amp;L</div><div id="dtMarkPnl">—</div></div>
-        <div class="stat"><div class="k">Prob. of Profit</div><div id="dtPop">—</div><div class="pop-note">delta approx.</div></div>
-      </div>
+      <div class="stats-strip" id="dtStatsStrip"></div>
       <div class="chart-container" id="detailPayoffChart"></div>
       <div class="slider-row">
         <span class="muted" style="font-size:11px">Today</span>
-        <input type="range" id="detailDateSlider" min="0" max="7" value="0" oninput="onDateSliderChange(this.value)">
+        <input type="range" id="detailDateSlider" min="0" max="7" value="7" oninput="onDateSliderChange(this.value)">
         <span class="muted" style="font-size:11px">Expiration</span>
         <span class="slider-label" id="detailSliderLabel">—</span>
+      </div>
+      <div class="range-row">
+        <span class="rlabel">RANGE &plusmn;<span id="dtRangeVal">25</span>%</span>
+        <input type="range" id="dtRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('dt')">
+        <button class="range-reset" onclick="resetRange('dt')" title="Reset">&#8634;</button>
       </div>
       <div class="legend">
         <span><span class="dot" style="background:#e0a93f">A</span>Short strike (sold)</span>
         <span><span class="dot" style="background:#4f8ef7">B</span>Long strike (bought)</span>
-        <span><span class="sw" style="background:#35c98f"></span>Selected date (profit)</span>
-        <span><span class="sw" style="background:#e5566d"></span>Selected date (loss)</span>
-        <span><span class="sw" style="background:#8b93a1;border-top:1px dashed #8b93a1;height:0"></span>At expiration</span>
+        <span><span class="sw" style="background:#35c98f"></span>Profit</span>
+        <span><span class="sw" style="background:#e5566d"></span>Loss</span>
         <span><span class="dot" style="background:#4f8ef7">●</span>Current mark P&amp;L</span>
       </div>
       <h2 style="margin-top:20px">P&amp;L Over Time</h2>
@@ -258,7 +317,7 @@ function showTab(name) {
   document.getElementById('tabBtn-' + name).classList.add('active');
   document.getElementById('tqqqControls').style.display = name === 'tqqq' ? 'flex' : 'none';
   document.getElementById('pageTitle').firstChild.textContent = name === 'tqqq' ? 'TQQQ Weekly Strategy ' : 'Vertical Credit Spreads ';
-  if (name === 'spreads') { loadSpreads(); loadExpirations(); }
+  if (name === 'spreads') { loadSpreads(); loadTicker(); loadExpirations(); }
 }
 
 // ============ TQQQ WEEKLY ============
@@ -395,60 +454,163 @@ async function confirmKill() {
 
 // ============ VERTICAL SPREADS ============
 
+let currentSpot = null;
+let currentExpirations = [];
+let selectedExpKey = null;
+let selectedExpirationDate = null;
+let currentChainOptions = [];
+let activeLeg = 'short';
+let vsRangeFraction = 0.25;
+let dtRangeFraction = 0.25;
+
+async function loadTicker() {
+  const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
+  if (!symbol) return;
+  try {
+    const res = await fetch('/api/vertical-spread/quote?symbol=' + encodeURIComponent(symbol));
+    const q = await res.json();
+    if (!res.ok) { document.getElementById('vsTickerPrice').textContent = '—'; return; }
+    currentSpot = q.lastPrice;
+    document.getElementById('vsTickerPrice').textContent = '$' + Number(q.lastPrice).toFixed(2);
+    const chg = q.change ?? 0, pct = q.changePercent ?? 0;
+    const cls = chg >= 0 ? 'green' : 'red';
+    const sign = chg >= 0 ? '+' : '';
+    const el = document.getElementById('vsTickerChange');
+    el.className = 'ticker-change ' + cls;
+    el.textContent = `${sign}${(pct*100).toFixed(2)}% ${sign}$${Math.abs(chg).toFixed(2)}`;
+  } catch (e) { /* quote is a nice-to-have, don't block the builder on it */ }
+}
+
+async function onSymbolChange() {
+  await loadTicker();
+  await loadExpirations();
+}
+
+function onRightChange() {
+  document.getElementById('vsShortStrike').value = '';
+  document.getElementById('vsLongStrike').value = '';
+  loadChainHint();
+}
+
+function setActiveLeg(leg) {
+  activeLeg = leg;
+  document.getElementById('legBtnShort').classList.toggle('active', leg === 'short');
+  document.getElementById('legBtnLong').classList.toggle('active', leg === 'long');
+}
+
 async function loadExpirations() {
   const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
   if (!symbol) return;
-  const sel = document.getElementById('vsExpiration');
-  sel.innerHTML = '<option>Loading…</option>';
+  const monthsDiv = document.getElementById('vsExpMonths');
+  const daysDiv = document.getElementById('vsExpDays');
+  monthsDiv.innerHTML = '<span class="muted">Loading…</span>';
+  daysDiv.innerHTML = '';
   try {
     const res = await fetch('/api/vertical-spread/expirations?symbol=' + encodeURIComponent(symbol));
     const exps = await res.json();
-    if (!res.ok || !exps.length) { sel.innerHTML = '<option>No expirations</option>'; return; }
-    sel.innerHTML = exps.map(e => {
-      const d = e.expirationDate.substring(0, 10);
-      return `<option value="${d}">${d} (${e.daysToExpiration}d, ${e.dayOfWeek})</option>`;
-    }).join('');
-    sel.onchange = loadChainHint;
-    await loadChainHint();
+    if (!res.ok || !exps.length) { monthsDiv.innerHTML = '<span class="muted">No expirations</span>'; return; }
+    currentExpirations = exps.map(e => ({ date: e.expirationDate.substring(0, 10), dte: e.daysToExpiration, dow: e.dayOfWeek }));
+    const first = currentExpirations[0];
+    selectedExpKey = first.date.substring(0, 7);
+    renderExpMonths();
+    selectExpiration(first.date);
   } catch (e) {
-    sel.innerHTML = '<option>Error</option>';
+    monthsDiv.innerHTML = '<span class="muted">Error loading expirations</span>';
   }
+}
+
+function renderExpMonths() {
+  const keys = [...new Set(currentExpirations.map(e => e.date.substring(0, 7)))];
+  const monthsDiv = document.getElementById('vsExpMonths');
+  const nowYear = new Date().getFullYear();
+  monthsDiv.innerHTML = keys.map(k => {
+    const d = new Date(k + '-01T00:00:00');
+    const label = d.toLocaleDateString(undefined, { month: 'short' }) + (d.getFullYear() !== nowYear ? ` '${String(d.getFullYear()).slice(2)}` : '');
+    return `<button class="exp-btn ${k === selectedExpKey ? 'active' : ''}" onclick="onExpMonthClick('${k}')">${label}</button>`;
+  }).join('');
+}
+
+function onExpMonthClick(key) {
+  selectedExpKey = key;
+  renderExpMonths();
+  const firstOfMonth = currentExpirations.find(e => e.date.substring(0, 7) === key);
+  if (firstOfMonth) selectExpiration(firstOfMonth.date);
+}
+
+function renderExpDays() {
+  const daysDiv = document.getElementById('vsExpDays');
+  const inMonth = currentExpirations.filter(e => e.date.substring(0, 7) === selectedExpKey);
+  daysDiv.innerHTML = inMonth.map(e => {
+    const day = parseInt(e.date.substring(8, 10));
+    return `<button class="exp-btn ${e.date === selectedExpirationDate ? 'active' : ''}" onclick="selectExpiration('${e.date}')">${day}</button>`;
+  }).join('');
+}
+
+function selectExpiration(date) {
+  selectedExpirationDate = date;
+  const meta = currentExpirations.find(e => e.date === date);
+  document.getElementById('vsExpDteLabel').textContent = meta ? `${meta.dte}d` : '';
+  renderExpDays();
+  loadChainHint();
+}
+
+function autoPickDefaultStrikes(opts, right) {
+  let best = opts[0], bestDiff = Infinity;
+  for (const o of opts) {
+    if (o.delta == null) continue;
+    const diff = Math.abs(Math.abs(o.delta) - 0.30);
+    if (diff < bestDiff) { bestDiff = diff; best = o; }
+  }
+  document.getElementById('vsShortStrike').value = best.strike;
+  const idx = opts.findIndex(o => o.strike === best.strike);
+  const longIdx = right === 'Put' ? Math.max(0, idx - 1) : Math.min(opts.length - 1, idx + 1);
+  document.getElementById('vsLongStrike').value = opts[longIdx].strike;
 }
 
 async function loadChainHint() {
   const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
-  const exp = document.getElementById('vsExpiration').value;
+  const exp = selectedExpirationDate;
   const right = document.getElementById('vsRight').value;
   const hint = document.getElementById('vsChainHint');
-  const chainDiv = document.getElementById('vsChainTable');
   if (!exp) return;
   hint.textContent = 'Loading chain…';
   try {
     const res = await fetch(`/api/vertical-spread/chain?symbol=${encodeURIComponent(symbol)}&expiration=${exp}`);
     const chain = await res.json();
-    const opts = (chain.options || []).filter(o => o.right === right).sort((a,b) => a.strike - b.strike);
-    if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; chainDiv.innerHTML = ''; return; }
-    hint.textContent = `Click a strike below to fill Short/Long, or type them directly. ${opts.length} strikes available.`;
-    chainDiv.innerHTML = `<table style="font-size:12px;max-height:220px;display:block;overflow-y:auto">
-      <thead><tr><th>Strike</th><th>Bid</th><th>Ask</th><th>Delta</th><th>OI</th><th></th></tr></thead>
-      <tbody>${opts.map(o => `<tr>
-        <td>${o.strike}</td><td>${o.bid?.toFixed(2) ?? '—'}</td><td>${o.ask?.toFixed(2) ?? '—'}</td>
-        <td>${o.delta != null ? o.delta.toFixed(2) : '—'}</td><td>${o.openInterest ?? 0}</td>
-        <td>
-          <button class="small btn-blue" onclick="document.getElementById('vsShortStrike').value=${o.strike}">Short</button>
-          <button class="small btn-muted" onclick="document.getElementById('vsLongStrike').value=${o.strike}">Long</button>
-        </td>
-      </tr>`).join('')}</tbody></table>`;
+    const opts = (chain.options || []).filter(o => o.right === right).sort((a, b) => a.strike - b.strike);
+    currentChainOptions = opts;
+    if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; document.getElementById('vsStrikeRuler').innerHTML = ''; return; }
+    hint.textContent = `${opts.length} strikes available — click A or B, then click the ruler to set that leg's strike.`;
+    if (!document.getElementById('vsShortStrike').value) autoPickDefaultStrikes(opts, right);
+    onStrikeInputChange();
   } catch (e) {
     hint.textContent = 'Could not load chain.';
   }
+}
+
+function renderStrikeRulerFromChain() {
+  renderStrikeRuler('vsStrikeRuler', {
+    strikes: currentChainOptions.map(o => o.strike),
+    shortStrike: parseFloat(document.getElementById('vsShortStrike').value),
+    longStrike: parseFloat(document.getElementById('vsLongStrike').value),
+    spot: currentSpot,
+    right: document.getElementById('vsRight').value,
+    symbol: document.getElementById('vsSymbol').value.trim().toUpperCase()
+  });
+}
+
+function onStrikeInputChange() {
+  document.getElementById('legShortVal').textContent = document.getElementById('vsShortStrike').value || '—';
+  document.getElementById('legLongVal').textContent = document.getElementById('vsLongStrike').value || '—';
+  renderStrikeRulerFromChain();
+  previewSpread();
 }
 
 function currentBuildRequest() {
   return {
     symbol: document.getElementById('vsSymbol').value.trim().toUpperCase(),
     right: document.getElementById('vsRight').value,
-    expirationDate: document.getElementById('vsExpiration').value,
+    expirationDate: selectedExpirationDate,
     shortStrike: parseFloat(document.getElementById('vsShortStrike').value),
     longStrike: parseFloat(document.getElementById('vsLongStrike').value),
     contracts: parseInt(document.getElementById('vsContracts').value) || 1
@@ -457,32 +619,60 @@ function currentBuildRequest() {
 
 async function previewSpread() {
   const req = currentBuildRequest();
-  if (!req.expirationDate || isNaN(req.shortStrike) || isNaN(req.longStrike)) {
-    alert('Pick an expiration and both strikes first.');
-    return;
-  }
+  if (!req.expirationDate || isNaN(req.shortStrike) || isNaN(req.longStrike)) return;
   const res = await fetch('/api/vertical-spread/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
   const body = await res.json();
-  if (!res.ok) { alert('Preview failed: ' + (body.message || res.status)); document.getElementById('btnSaveSpread').disabled = true; return; }
+  if (!res.ok) { document.getElementById('vsPreviewBox').style.display = 'none'; document.getElementById('btnSaveSpread').disabled = true; return; }
+
+  window._lastPreviewReq = req;
+  window._lastPreviewPayoff = body.payoff;
 
   document.getElementById('vsPreviewBox').style.display = 'block';
-  document.getElementById('pvNetCredit').textContent = fmtMoney(body.netCredit * req.contracts * 100);
-  document.getElementById('pvMaxProfit').innerHTML = `<span class="green">${fmtMoney(body.payoff.maxProfit)}</span>`;
-  document.getElementById('pvMaxLoss').innerHTML = `<span class="red">${fmtMoney(body.payoff.maxLoss)}</span>`;
-  document.getElementById('pvBreakeven').textContent = fmtMoney(body.payoff.breakevenPrice);
-  document.getElementById('pvPop').textContent = fmtPct(body.payoff.probabilityOfProfit);
-  renderPayoffChart('vsPreviewChart', {
-    primaryCurve: body.payoff.today,
-    secondaryCurve: body.payoff.atExpiration,
-    maxProfit: body.payoff.maxProfit,
-    maxLoss: body.payoff.maxLoss,
-    breakevenPrice: body.payoff.breakevenPrice,
-    currentUnderlyingPrice: body.payoff.currentUnderlyingPrice,
-    currentMarkPnL: null,
-    shortStrike: req.shortStrike,
-    longStrike: req.longStrike
-  });
+  const netCreditTotal = body.netCredit * req.contracts * 100;
+  const margin = Math.abs(req.shortStrike - req.longStrike) * 100 * req.contracts;
+  renderStatsStrip('vsStatsStrip', buildStatItems({
+    netCredit: netCreditTotal, margin, maxProfit: body.payoff.maxProfit, maxLoss: body.payoff.maxLoss,
+    pop: body.payoff.probabilityOfProfit, breakeven: body.payoff.breakevenPrice, spot: body.payoff.currentUnderlyingPrice, right: req.right
+  }));
+
+  const slider = document.getElementById('vsDateSlider');
+  onVsDateSliderChange(slider.value);
   document.getElementById('btnSaveSpread').disabled = false;
+}
+
+function onVsDateSliderChange(val) {
+  const payoff = window._lastPreviewPayoff;
+  if (!payoff) return;
+  const t = parseInt(val) / 100; // 0 = today, 1 = at expiration
+  const today = payoff.today, atExp = payoff.atExpiration;
+  const curve = today.map((p, i) => ({ underlyingPrice: p.underlyingPrice, pnL: (pnlOf(p) * (1 - t)) + (pnlOf(atExp[i]) * t) }));
+  const req = window._lastPreviewReq || {};
+  renderPayoffChart('vsPreviewChart', {
+    primaryCurve: curve,
+    maxProfit: payoff.maxProfit, maxLoss: payoff.maxLoss, breakevenPrice: payoff.breakevenPrice,
+    currentUnderlyingPrice: payoff.currentUnderlyingPrice, currentMarkPnL: null,
+    shortStrike: req.shortStrike, longStrike: req.longStrike, rangeFraction: vsRangeFraction
+  });
+  document.getElementById('vsSliderLabel').textContent = t >= 0.999 ? 'At expiration' : (t <= 0.001 ? 'Today' : `${Math.round(t * 100)}% to expiration`);
+}
+
+function onRangeChange(which) {
+  const slider = document.getElementById(which + 'RangeSlider');
+  const val = parseInt(slider.value);
+  document.getElementById(which + 'RangeVal').textContent = val;
+  const frac = val / 100;
+  if (which === 'vs') {
+    vsRangeFraction = frac;
+    onVsDateSliderChange(document.getElementById('vsDateSlider').value);
+  } else {
+    dtRangeFraction = frac;
+    onDateSliderChange(document.getElementById('detailDateSlider').value);
+  }
+}
+
+function resetRange(which) {
+  document.getElementById(which + 'RangeSlider').value = 25;
+  onRangeChange(which);
 }
 
 async function saveSpread() {
@@ -493,6 +683,8 @@ async function saveSpread() {
   alert('Saved as Paper strategy #' + body.id + '. It will start tracking real market data on the next job tick.');
   document.getElementById('vsPreviewBox').style.display = 'none';
   document.getElementById('btnSaveSpread').disabled = true;
+  document.getElementById('vsShortStrike').value = '';
+  document.getElementById('vsLongStrike').value = '';
   loadSpreads();
 }
 
@@ -567,18 +759,23 @@ async function viewSpread(id) {
 
   document.getElementById('detailTitle').textContent =
     `Spread #${id} — ${strategy.symbol} ${strategy.spreadType} ${strategy.shortStrike}/${strategy.longStrike} exp ${(strategy.expirationDate||'').substring(0,10)} (${strategy.status})`;
-  document.getElementById('dtSpot').textContent = fmtMoney(timeline.currentUnderlyingPrice);
-  document.getElementById('dtMaxProfit').innerHTML = `<span class="green">${fmtMoney(timeline.maxProfit)}</span>`;
-  document.getElementById('dtMaxLoss').innerHTML = `<span class="red">${fmtMoney(timeline.maxLoss)}</span>`;
-  document.getElementById('dtBreakeven').textContent = fmtMoney(timeline.breakevenPrice);
-  const markPnl = timeline.currentMarkPnL;
-  document.getElementById('dtMarkPnl').innerHTML = markPnl != null ? `<span class="${pnlClass(markPnl)}">${fmtMoney(markPnl)}</span>` : '—';
-  document.getElementById('dtPop').textContent = fmtPct(timeline.probabilityOfProfit);
+
+  const netCreditTotal = (strategy.netCreditReceived ?? strategy.netCreditAtBuild) * strategy.contracts * 100;
+  const margin = (strategy.width ?? Math.abs(strategy.shortStrike - strategy.longStrike)) * 100 * strategy.contracts;
+  const items = buildStatItems({
+    netCredit: netCreditTotal, margin, maxProfit: timeline.maxProfit, maxLoss: timeline.maxLoss,
+    pop: timeline.probabilityOfProfit, breakeven: timeline.breakevenPrice, spot: timeline.currentUnderlyingPrice, right: strategy.right
+  });
+  if (timeline.currentMarkPnL != null) items.push({ icon: 'target', label: 'Mark P&L', value: fmtMoney(timeline.currentMarkPnL), cls: pnlClass(timeline.currentMarkPnL) });
+  renderStatsStrip('dtStatsStrip', items);
 
   const slider = document.getElementById('detailDateSlider');
   slider.max = timeline.steps.length - 1;
-  slider.value = 0;
-  onDateSliderChange(0);
+  slider.value = slider.max;
+  dtRangeFraction = 0.25;
+  document.getElementById('dtRangeSlider').value = 25;
+  document.getElementById('dtRangeVal').textContent = '25';
+  onDateSliderChange(slider.value);
 
   renderEquityChart('detailEquityChart', marks);
 }
@@ -591,12 +788,12 @@ function onDateSliderChange(idx) {
 
   renderPayoffChart('detailPayoffChart', {
     primaryCurve: step.curve,
-    secondaryCurve: currentTimeline.atExpiration,
     maxProfit: currentTimeline.maxProfit,
     maxLoss: currentTimeline.maxLoss,
     breakevenPrice: currentTimeline.breakevenPrice,
     currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice,
     currentMarkPnL: currentTimeline.currentMarkPnL,
+    rangeFraction: dtRangeFraction,
     shortStrike: strategy.shortStrike,
     longStrike: strategy.longStrike
   });
@@ -606,23 +803,121 @@ function onDateSliderChange(idx) {
   document.getElementById('detailSliderLabel').textContent = label;
 }
 
-// ---- Lightweight inline-SVG chart rendering (no external chart library) ----
-// Visual language modeled on OptionStrat's strategy builder: a shaded green/red area between
-// the "live" curve and the zero line, dashed A/B strike markers, a dashed at-expiration
-// reference line, and a mouse-following crosshair readout.
+// ---- Icons + stats strip (OptionStrat-style horizontal stat row) ----
+
+function icon(name) {
+  const paths = {
+    coin: '<circle cx="12" cy="12" r="9"/><path d="M9 15c0 1 1.2 2 3 2s3-.8 3-2-1.5-1.6-3-2-3-1-3-2 1.2-2 3-2 3 .8 3 2"/><path d="M12 5.5v1M12 17.5v1"/>',
+    shield: '<path d="M12 3l7 3v6c0 5-3.2 8.2-7 9-3.8-.8-7-4-7-9V6z"/>',
+    down: '<path d="M12 4v16"/><path d="M6 14l6 6 6-6"/>',
+    up: '<path d="M12 20V4"/><path d="M6 10l6-6 6 6"/>',
+    target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+    right: '<path d="M4 12h16"/><path d="M14 6l6 6-6 6"/>'
+  };
+  return `<svg class="sicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
+}
+
+function renderStatsStrip(containerId, items) {
+  document.getElementById(containerId).innerHTML = items.map(it => `
+    <div class="sitem">${icon(it.icon)}<div><div class="sk">${it.label}</div><div class="sv ${it.cls || ''}">${it.value}</div></div></div>
+  `).join('');
+}
+
+function buildStatItems(d) {
+  const beDir = d.right === 'Call' ? 'Below' : 'Above';
+  const bePct = d.spot ? ((d.breakeven - d.spot) / d.spot * 100) : null;
+  return [
+    { icon: 'coin', label: 'Net Credit', value: fmtMoney(d.netCredit) },
+    { icon: 'shield', label: 'Est. Margin', value: fmtMoney(d.margin) },
+    { icon: 'down', label: 'Max Loss', value: fmtMoney(d.maxLoss), cls: 'red' },
+    { icon: 'up', label: 'Max Profit', value: fmtMoney(d.maxProfit), cls: 'green' },
+    { icon: 'target', label: 'Chance of Profit', value: fmtPct(d.pop) },
+    { icon: 'right', label: 'Breakeven', value: d.breakeven != null ? `${beDir} ${fmtMoney(d.breakeven)}${bePct != null ? ` (${bePct >= 0 ? '+' : ''}${bePct.toFixed(1)}%)` : ''}` : '—' }
+  ];
+}
+
+// ---- Strike-picker ruler: a horizontal number line of available strikes with A/B pill
+// badges for the short/long legs and a triangle marker at the current spot -- click the
+// ruler to set whichever leg (A/B toggle above) is active to the nearest real strike. ----
+
+function renderStrikeRuler(containerId, cfg) {
+  const el = document.getElementById(containerId);
+  const strikes = cfg.strikes || [];
+  if (!strikes.length) { el.innerHTML = '<div class="muted" style="font-size:12px">No strikes loaded.</div>'; return; }
+
+  const w = 720, h = 90, padL = 24, padR = 24, midY = 45;
+  const xs = strikes.concat(cfg.spot ? [cfg.spot] : []);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const span = (xMax - xMin) || 1;
+  const xScale = x => padL + (x - xMin) / span * (w - padL - padR);
+
+  let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;cursor:pointer">`;
+  svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="2"/>`;
+  strikes.forEach(s => {
+    const x = xScale(s);
+    svg += `<line x1="${x.toFixed(1)}" y1="${midY - 5}" x2="${x.toFixed(1)}" y2="${midY + 5}" stroke="#4a5060" stroke-width="1"/>`;
+  });
+  const labelEvery = Math.max(1, Math.ceil(strikes.length / 12));
+  strikes.forEach((s, i) => {
+    if (i % labelEvery !== 0) return;
+    const x = xScale(s);
+    svg += `<text x="${x.toFixed(1)}" y="${midY + 22}" fill="#8b93a1" font-size="9" text-anchor="middle">${s}</text>`;
+  });
+  if (cfg.spot) {
+    const sx = xScale(cfg.spot);
+    svg += `<polygon points="${(sx - 5).toFixed(1)},${midY - 16} ${(sx + 5).toFixed(1)},${midY - 16} ${sx.toFixed(1)},${midY - 6}" fill="#e6e8ec"/>`;
+    svg += `<text x="${sx.toFixed(1)}" y="${midY - 20}" fill="#e6e8ec" font-size="9" text-anchor="middle">${cfg.symbol || ''}</text>`;
+  }
+  const pill = (strike, label, color, above) => {
+    if (strike == null || isNaN(strike)) return '';
+    const x = xScale(strike);
+    const y = above ? midY - 30 : midY + 30;
+    return `<line x1="${x.toFixed(1)}" y1="${(above ? y + 9 : midY + 5).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(above ? midY - 5 : y - 9).toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="2,2"/>` +
+      `<rect x="${(x - 22).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="44" height="18" rx="9" fill="${color}"/>` +
+      `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>`;
+  };
+  const suffix = cfg.right === 'Call' ? 'C' : 'P';
+  svg += pill(cfg.shortStrike, `A ${cfg.shortStrike ?? ''}${suffix}`, '#e0a93f', true);
+  svg += pill(cfg.longStrike, `B ${cfg.longStrike ?? ''}${suffix}`, '#4f8ef7', false);
+  svg += `</svg>`;
+  el.innerHTML = svg;
+
+  const svgEl = document.getElementById(containerId + '-svg');
+  svgEl.addEventListener('click', (ev) => {
+    const rect = svgEl.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) / rect.width * w;
+    const priceAtCursor = xMin + (px - padL) / (w - padL - padR) * span;
+    let nearest = strikes[0], nd = Infinity;
+    for (const s of strikes) { const d = Math.abs(s - priceAtCursor); if (d < nd) { nd = d; nearest = s; } }
+    const targetInput = activeLeg === 'short' ? 'vsShortStrike' : 'vsLongStrike';
+    document.getElementById(targetInput).value = nearest;
+    onStrikeInputChange();
+  });
+}
+
+// ---- Lightweight inline-SVG payoff chart (no external chart library) ----
+// Visual language modeled on the OptionStrat strategy builder: a vertical gradient fill that's
+// most saturated at the zero line and fades away from it (green above, red below), a single
+// P&L curve whose stroke color flips at the zero crossing, a cyan breakeven line, a dotted
+// current-price line, dashed A/B strike markers, and a mouse-following crosshair readout.
 
 function pnlOf(p) { return p.pnL ?? p.pnl; }
 
 function renderPayoffChart(containerId, cfg) {
   const el = document.getElementById(containerId);
-  const primary = cfg.primaryCurve || [];
-  const secondary = cfg.secondaryCurve || [];
+  let primary = cfg.primaryCurve || [];
   if (!primary.length) { el.innerHTML = '<div class="muted">No payoff data.</div>'; return; }
 
-  const w = 720, h = 320, padL = 64, padR = 24, padT = 28, padB = 34;
-  const allPts = primary.concat(secondary);
-  const xs = allPts.map(p => p.underlyingPrice);
-  const ys = allPts.map(pnlOf).concat([0, cfg.maxProfit ?? 0, cfg.maxLoss ?? 0]);
+  if (cfg.rangeFraction && cfg.currentUnderlyingPrice) {
+    const lo = cfg.currentUnderlyingPrice * (1 - cfg.rangeFraction);
+    const hi = cfg.currentUnderlyingPrice * (1 + cfg.rangeFraction);
+    const filtered = primary.filter(p => p.underlyingPrice >= lo && p.underlyingPrice <= hi);
+    if (filtered.length >= 2) primary = filtered;
+  }
+
+  const w = 720, h = 340, padL = 64, padR = 24, padT = 46, padB = 34;
+  const xs = primary.map(p => p.underlyingPrice);
+  const ys = primary.map(pnlOf).concat([0]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const yMin = Math.min(...ys), yMax = Math.max(...ys);
   const xSpan = (xMax - xMin) || 1, ySpan = (yMax - yMin) || 1;
@@ -640,54 +935,72 @@ function renderPayoffChart(containerId, cfg) {
     return `M${firstX},${zeroY.toFixed(1)} ` + pts.map(p => `L${xScale(p.underlyingPrice).toFixed(1)},${yScale(pnlOf(p)).toFixed(1)}`).join(' ') + ` L${lastX},${zeroY.toFixed(1)} Z`;
   };
 
-  const clipId = 'clip_' + containerId;
+  const gradId = 'grad_' + containerId;
+  const clipBelow = 'clipB_' + containerId;
+  const clipAbove = 'clipA_' + containerId;
   let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;cursor:crosshair">`;
-  svg += `<defs><clipPath id="${clipId}"><rect x="0" y="${zeroY.toFixed(1)}" width="${w}" height="${Math.max(0, h - zeroY).toFixed(1)}"/></clipPath></defs>`;
+  svg += `<defs>
+    <clipPath id="${clipBelow}"><rect x="0" y="${zeroY.toFixed(1)}" width="${w}" height="${Math.max(0, h - zeroY).toFixed(1)}"/></clipPath>
+    <clipPath id="${clipAbove}"><rect x="0" y="0" width="${w}" height="${Math.max(0, zeroY).toFixed(1)}"/></clipPath>
+    <linearGradient id="${gradId}_g" x1="0" y1="${zeroY.toFixed(1)}" x2="0" y2="${padT}" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#35c98f" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#35c98f" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="${gradId}_r" x1="0" y1="${zeroY.toFixed(1)}" x2="0" y2="${(h - padB).toFixed(1)}" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e5566d" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#e5566d" stop-opacity="0.05"/>
+    </linearGradient>
+  </defs>`;
 
-  // Shaded area between the primary curve and zero: green everywhere, red re-painted only
-  // in the region below the zero line (screen-space clip), so profit/loss segments color
-  // correctly without needing to find exact zero-crossings.
+  // Gradient area between the curve and zero: painted twice, each copy clipped to only the
+  // screen region on its side of the zero line, so profit/loss shading is correct without
+  // computing exact zero-crossings.
   const area = areaPath(primary);
-  svg += `<path d="${area}" fill="#35c98f" fill-opacity="0.16"/>`;
-  svg += `<path d="${area}" fill="#e5566d" fill-opacity="0.22" clip-path="url(#${clipId})"/>`;
+  svg += `<path d="${area}" fill="url(#${gradId}_g)" clip-path="url(#${clipAbove})"/>`;
+  svg += `<path d="${area}" fill="url(#${gradId}_r)" clip-path="url(#${clipBelow})"/>`;
 
-  svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#4a5060" stroke-width="1"/>`;
-  svg += `<text x="${padL-8}" y="${zeroY.toFixed(1)}" fill="#8b93a1" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>`;
+  const gridSteps = 5;
+  for (let i = 0; i <= gridSteps; i++) {
+    const gy = padT + (h - padT - padB) * i / gridSteps;
+    const val = yMax - (ySpan * i / gridSteps);
+    svg += `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}" stroke="#20242e" stroke-width="1"/>`;
+    svg += `<text x="${padL - 8}" y="${(gy + 3).toFixed(1)}" fill="#6b7280" font-size="9" text-anchor="end">${fmtMoney(val)}</text>`;
+  }
+  svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w - padR}" y2="${zeroY.toFixed(1)}" stroke="#4a5060" stroke-width="1"/>`;
 
-  if (secondary.length) svg += `<path d="${linePath(secondary)}" fill="none" stroke="#8b93a1" stroke-width="1.5" stroke-dasharray="5,4"/>`;
-
-  svg += `<path d="${linePath(primary)}" fill="none" stroke="#35c98f" stroke-width="2.5"/>`;
-  svg += `<path d="${linePath(primary)}" fill="none" stroke="#e5566d" stroke-width="2.5" clip-path="url(#${clipId})"/>`;
+  svg += `<path d="${linePath(primary)}" fill="none" stroke="#35c98f" stroke-width="2.5" clip-path="url(#${clipAbove})"/>`;
+  svg += `<path d="${linePath(primary)}" fill="none" stroke="#e5566d" stroke-width="2.5" clip-path="url(#${clipBelow})"/>`;
 
   const strikeMarker = (strike, label, color) => {
-    if (strike == null) return '';
+    if (strike == null || isNaN(strike)) return '';
     const x = xScale(strike);
     if (x < padL || x > w - padR) return '';
-    return `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h-padB}" stroke="${color}" stroke-width="1" stroke-dasharray="2,3" opacity="0.8"/>` +
-      `<circle cx="${x.toFixed(1)}" cy="${(padT-10).toFixed(1)}" r="8" fill="${color}"/>` +
-      `<text x="${x.toFixed(1)}" y="${(padT-6).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>`;
+    return `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h - padB}" stroke="${color}" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>` +
+      `<circle cx="${x.toFixed(1)}" cy="${(padT - 18).toFixed(1)}" r="8" fill="${color}"/>` +
+      `<text x="${x.toFixed(1)}" y="${(padT - 14).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>`;
   };
   svg += strikeMarker(cfg.shortStrike, 'A', '#e0a93f');
   svg += strikeMarker(cfg.longStrike, 'B', '#4f8ef7');
 
-  if (spotX >= padL && spotX <= w - padR) {
-    svg += `<line x1="${spotX.toFixed(1)}" y1="${padT}" x2="${spotX.toFixed(1)}" y2="${h-padB}" stroke="#e6e8ec" stroke-width="1.5"/>`;
-    svg += `<text x="${spotX.toFixed(1)}" y="${h-padB+16}" fill="#e6e8ec" font-size="11" text-anchor="middle">$${Number(cfg.currentUnderlyingPrice).toFixed(2)}</text>`;
-  }
-
   if (cfg.breakevenPrice !== null && cfg.breakevenPrice !== undefined) {
     const bx = xScale(cfg.breakevenPrice);
     if (bx >= padL && bx <= w - padR) {
-      svg += `<rect x="${(bx-4).toFixed(1)}" y="${(zeroY-4).toFixed(1)}" width="8" height="8" fill="#e6e8ec" transform="rotate(45 ${bx.toFixed(1)} ${zeroY.toFixed(1)})"/>`;
+      svg += `<line x1="${bx.toFixed(1)}" y1="${padT}" x2="${bx.toFixed(1)}" y2="${h - padB}" stroke="#4fd1e6" stroke-width="1.5"/>`;
+      svg += `<text x="${bx.toFixed(1)}" y="12" fill="#4fd1e6" font-size="11" font-weight="600" text-anchor="middle">$${Number(cfg.breakevenPrice).toFixed(2)}</text>`;
+      svg += `<rect x="${(bx - 4).toFixed(1)}" y="${(zeroY - 4).toFixed(1)}" width="8" height="8" fill="#4fd1e6" transform="rotate(45 ${bx.toFixed(1)} ${zeroY.toFixed(1)})"/>`;
     }
+  }
+
+  if (spotX >= padL && spotX <= w - padR) {
+    svg += `<line x1="${spotX.toFixed(1)}" y1="${padT}" x2="${spotX.toFixed(1)}" y2="${h - padB}" stroke="#e6e8ec" stroke-width="1" stroke-dasharray="3,3" opacity="0.7"/>`;
   }
 
   if (cfg.currentMarkPnL !== null && cfg.currentMarkPnL !== undefined && spotX >= padL && spotX <= w - padR) {
     svg += `<circle cx="${spotX.toFixed(1)}" cy="${yScale(cfg.currentMarkPnL).toFixed(1)}" r="5" fill="#4f8ef7" stroke="#0f1115" stroke-width="1.5"/>`;
   }
 
-  svg += `<text x="${padL}" y="${h-10}" fill="#8b93a1" font-size="10">${xMin.toFixed(2)}</text>`;
-  svg += `<text x="${w-padR}" y="${h-10}" fill="#8b93a1" font-size="10" text-anchor="end">${xMax.toFixed(2)}</text>`;
+  svg += `<text x="${padL}" y="${h - 10}" fill="#8b93a1" font-size="10">$${xMin.toFixed(2)}</text>`;
+  svg += `<text x="${w - padR}" y="${h - 10}" fill="#8b93a1" font-size="10" text-anchor="end">$${xMax.toFixed(2)}</text>`;
   svg += `</svg><div class="chart-tooltip" id="${containerId}-tooltip" style="display:none"></div>`;
 
   el.innerHTML = svg;
