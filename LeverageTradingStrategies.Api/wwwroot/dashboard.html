@@ -7,7 +7,7 @@
 <style>
   :root {
     --bg: #0f1115; --panel: #171a21; --border: #2a2e38; --text: #e6e8ec; --muted: #8b93a1;
-    --green: #35c98f; --red: #e5566d; --amber: #e0a93f; --blue: #4f8ef7;
+    --green: #00e88f; --red: #ff3d5e; --amber: #ffb020; --blue: #3d8bff; --cyan: #22e6e6; --purple: #b26bff;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -21,9 +21,9 @@
   .card .value { font-size: 22px; font-weight: 600; }
   .value.green { color: var(--green); } .value.red { color: var(--red); } .value.amber { color: var(--amber); }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .badge.Running, .badge.Live { background: rgba(53,201,143,.15); color: var(--green); }
-  .badge.Paused, .badge.Paper { background: rgba(224,169,63,.15); color: var(--amber); }
-  .badge.Killed, .badge.Failed { background: rgba(229,86,109,.15); color: var(--red); }
+  .badge.Running, .badge.Live { background: rgba(0,232,143,.15); color: var(--green); }
+  .badge.Paused, .badge.Paper { background: rgba(255,176,32,.15); color: var(--amber); }
+  .badge.Killed, .badge.Failed { background: rgba(255,61,94,.15); color: var(--red); }
   .badge.Closed { background: rgba(139,147,161,.15); color: var(--muted); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
   .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -38,18 +38,18 @@
   .controls { display: flex; gap: 10px; }
   button { border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
   button.small { padding: 6px 12px; font-size: 12px; }
-  #btnPause { background: rgba(224,169,63,.15); color: var(--amber); }
-  #btnResume { background: rgba(79,142,247,.15); color: var(--blue); }
-  #btnKill { background: rgba(229,86,109,.15); color: var(--red); }
-  .btn-blue { background: rgba(79,142,247,.15); color: var(--blue); }
-  .btn-green { background: rgba(53,201,143,.15); color: var(--green); }
-  .btn-red { background: rgba(229,86,109,.15); color: var(--red); }
+  #btnPause { background: rgba(255,176,32,.15); color: var(--amber); }
+  #btnResume { background: rgba(61,139,255,.15); color: var(--blue); }
+  #btnKill { background: rgba(255,61,94,.15); color: var(--red); }
+  .btn-blue { background: rgba(61,139,255,.15); color: var(--blue); }
+  .btn-green { background: rgba(0,232,143,.15); color: var(--green); }
+  .btn-red { background: rgba(255,61,94,.15); color: var(--red); }
   .btn-muted { background: rgba(139,147,161,.15); color: var(--muted); }
   button:hover { filter: brightness(1.2); }
   button:disabled { opacity: .4; cursor: not-allowed; }
   .muted { color: var(--muted); }
   .reason { color: var(--muted); font-size: 12px; max-width: 380px; }
-  .sim-tag { display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(79,142,247,.15); color: var(--blue); }
+  .sim-tag { display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(61,139,255,.15); color: var(--blue); }
   .err { color: var(--red); padding: 12px; }
   .tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
   .tab-btn { background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 600; padding: 12px 16px; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0; }
@@ -81,8 +81,8 @@
   .ticker-symbol input { background: #0f1115; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 15px; font-weight: 700; width: 100px; text-transform: uppercase; }
   .ticker-price { font-size: 22px; font-weight: 700; }
   .ticker-change { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-  .ticker-change.green { background: rgba(53,201,143,.15); color: var(--green); }
-  .ticker-change.red { background: rgba(229,86,109,.15); color: var(--red); }
+  .ticker-change.green { background: rgba(0,232,143,.15); color: var(--green); }
+  .ticker-change.red { background: rgba(255,61,94,.15); color: var(--red); }
   .ticker-badge { font-size: 11px; color: var(--muted); background: rgba(139,147,161,.12); padding: 3px 8px; border-radius: 999px; }
   .ticker-refresh { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; }
 
@@ -97,8 +97,8 @@
   .strike-block .block-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
   .leg-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
   .leg-btn { background: #0f1115; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
-  .leg-btn.active.short { border-color: var(--amber); color: var(--amber); background: rgba(224,169,63,.12); }
-  .leg-btn.active.long { border-color: var(--blue); color: var(--blue); background: rgba(79,142,247,.12); }
+  .leg-btn.active.short { border-color: var(--amber); color: var(--amber); background: rgba(255,176,32,.12); }
+  .leg-btn.active.long { border-color: var(--blue); color: var(--blue); background: rgba(61,139,255,.12); }
   #vsStrikeRuler { height: 90px; cursor: pointer; }
 
   .stats-strip { display: flex; gap: 0; margin: 14px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
@@ -113,6 +113,32 @@
   .range-row input[type=range] { flex: 1; accent-color: var(--blue); }
   .range-row .rval { font-size: 12px; color: var(--text); min-width: 40px; text-align: right; }
   .range-reset { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 11px; }
+
+  /* ---- View toggle (Graph/Table), greeks strip reuse, GEX overlay, wide-spread badge, popup ---- */
+  .view-toggle { display: flex; gap: 4px; margin: 10px 0; }
+  .view-btn { background: #0f1115; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .view-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .ruler-toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+  .link-btn { background: none; border: none; color: var(--blue); font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; }
+  .ruler-scroll { overflow-x: auto; }
+  .wide-spread-badge { display: inline-block; color: var(--amber); font-size: 10px; font-weight: 700; margin-left: 3px; }
+  .payoff-table-wrap { overflow-x: auto; }
+  .payoff-table-wrap table { font-size: 11px; }
+  .payoff-table-wrap th, .payoff-table-wrap td { padding: 5px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
+  .payoff-table-wrap th.pricecol, .payoff-table-wrap td.pricecol { text-align: right; position: sticky; left: 0; background: var(--panel); border-right: 1px solid var(--border); }
+  .wall-legend { display: flex; gap: 16px; font-size: 11px; margin-top: 6px; flex-wrap: wrap; }
+  .wall-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .wall-legend .sw2 { width: 14px; height: 2px; display: inline-block; }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-backdrop.open { display: flex; }
+  .modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 360px; max-width: 92vw; max-height: 86vh; overflow-y: auto; }
+  .modal-card h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal-warn { background: rgba(255,176,32,.15); color: var(--amber); font-size: 12px; padding: 6px 10px; border-radius: 6px; margin: 8px 0; }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 12px 0; }
+  .modal-grid .mk { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+  .modal-grid .mv { font-size: 14px; font-weight: 600; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -227,30 +253,54 @@
           <div class="form-field" style="margin-left:auto"><label>Short</label><input id="vsShortStrike" type="number" step="0.5" style="width:90px" onchange="onStrikeInputChange()"></div>
           <div class="form-field"><label>Long</label><input id="vsLongStrike" type="number" step="0.5" style="width:90px" onchange="onStrikeInputChange()"></div>
         </div>
-        <div class="chart-container" id="vsStrikeRuler"></div>
-        <div class="muted" id="vsChainHint" style="font-size:12px;margin-top:4px">Pick an expiration to load strikes.</div>
+        <div class="ruler-scroll"><div class="chart-container" id="vsStrikeRuler"></div></div>
+        <div class="ruler-toolbar">
+          <div class="muted" id="vsChainHint" style="font-size:12px">Pick an expiration to load strikes.</div>
+          <button class="link-btn" id="vsRulerModeBtn" onclick="toggleRulerMode('vs')" style="display:none">Show all strikes</button>
+        </div>
       </div>
 
       <div id="vsPreviewBox" style="display:none">
         <div class="stats-strip" id="vsStatsStrip"></div>
-        <div class="chart-container" id="vsPreviewChart"></div>
-        <div class="slider-row">
-          <span class="muted" style="font-size:11px">Today</span>
-          <input type="range" id="vsDateSlider" min="0" max="100" value="100" oninput="onVsDateSliderChange(this.value)">
-          <span class="muted" style="font-size:11px">Expiration</span>
-          <span class="slider-label" id="vsSliderLabel">At expiration</span>
+        <div class="stats-strip" id="vsGreeksStrip" style="margin-top:0"></div>
+
+        <div class="view-toggle">
+          <button class="view-btn active" id="vsViewBtn-graph" onclick="setViewMode('vs','graph')">&#9776; Graph</button>
+          <button class="view-btn" id="vsViewBtn-table" onclick="setViewMode('vs','table')">&#9638; Table</button>
         </div>
-        <div class="range-row">
-          <span class="rlabel">RANGE &plusmn;<span id="vsRangeVal">25</span>%</span>
-          <input type="range" id="vsRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('vs')">
-          <button class="range-reset" onclick="resetRange('vs')" title="Reset">&#8634;</button>
+        <div id="vsGraphView">
+          <div class="chart-container" id="vsPreviewChart"></div>
+          <div class="chart-container" id="vsGexChart" style="height:70px;margin-top:4px"></div>
+          <div class="wall-legend">
+            <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
+            <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
+            <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+          </div>
+          <div class="slider-row">
+            <span class="muted" style="font-size:11px">Today</span>
+            <input type="range" id="vsDateSlider" min="0" max="100" value="100" oninput="onVsDateSliderChange(this.value)">
+            <span class="muted" style="font-size:11px">Expiration</span>
+            <span class="slider-label" id="vsSliderLabel">At expiration</span>
+          </div>
+          <div class="range-row">
+            <span class="rlabel">RANGE &plusmn;<span id="vsRangeVal">25</span>%</span>
+            <input type="range" id="vsRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('vs')">
+            <button class="range-reset" onclick="resetRange('vs')" title="Reset">&#8634;</button>
+          </div>
+          <div class="range-row">
+            <span class="rlabel">IMPLIED VOLATILITY: <span id="vsIvVal">—</span></span>
+            <input type="range" id="vsIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('vs')" onchange="onIvChange('vs')">
+            <button class="range-reset" onclick="resetIv('vs')" title="Reset">&#8634;</button>
+          </div>
+          <div class="legend">
+            <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
+            <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
+            <span><span class="sw" style="background:#00e88f"></span>Profit</span>
+            <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
+          </div>
         </div>
-        <div class="legend">
-          <span><span class="dot" style="background:#e0a93f">A</span>Short strike (sold)</span>
-          <span><span class="dot" style="background:#4f8ef7">B</span>Long strike (bought)</span>
-          <span><span class="sw" style="background:#35c98f"></span>Profit</span>
-          <span><span class="sw" style="background:#e5566d"></span>Loss</span>
-        </div>
+        <div id="vsTableView" style="display:none"></div>
+
         <div class="controls" style="margin-top:10px">
           <button class="btn-green" id="btnSaveSpread" onclick="saveSpread()" disabled>Save (Paper)</button>
         </div>
@@ -272,30 +322,62 @@
     <div class="panel" id="detailPanel">
       <h2 id="detailTitle">Spread Detail</h2>
       <div class="stats-strip" id="dtStatsStrip"></div>
-      <div class="chart-container" id="detailPayoffChart"></div>
-      <div class="slider-row">
-        <span class="muted" style="font-size:11px">Today</span>
-        <input type="range" id="detailDateSlider" min="0" max="7" value="7" oninput="onDateSliderChange(this.value)">
-        <span class="muted" style="font-size:11px">Expiration</span>
-        <span class="slider-label" id="detailSliderLabel">—</span>
+      <div class="stats-strip" id="dtGreeksStrip" style="margin-top:0"></div>
+
+      <div class="view-toggle">
+        <button class="view-btn active" id="dtViewBtn-graph" onclick="setViewMode('dt','graph')">&#9776; Graph</button>
+        <button class="view-btn" id="dtViewBtn-table" onclick="setViewMode('dt','table')">&#9638; Table</button>
       </div>
-      <div class="range-row">
-        <span class="rlabel">RANGE &plusmn;<span id="dtRangeVal">25</span>%</span>
-        <input type="range" id="dtRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('dt')">
-        <button class="range-reset" onclick="resetRange('dt')" title="Reset">&#8634;</button>
+      <div id="dtGraphView">
+        <div class="chart-container" id="detailPayoffChart"></div>
+        <div class="chart-container" id="dtGexChart" style="height:70px;margin-top:4px"></div>
+        <div class="wall-legend">
+          <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
+          <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
+          <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+        </div>
+        <div class="slider-row">
+          <span class="muted" style="font-size:11px">Today</span>
+          <input type="range" id="detailDateSlider" min="0" max="7" value="7" oninput="onDateSliderChange(this.value)">
+          <span class="muted" style="font-size:11px">Expiration</span>
+          <span class="slider-label" id="detailSliderLabel">—</span>
+        </div>
+        <div class="range-row">
+          <span class="rlabel">RANGE &plusmn;<span id="dtRangeVal">25</span>%</span>
+          <input type="range" id="dtRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('dt')">
+          <button class="range-reset" onclick="resetRange('dt')" title="Reset">&#8634;</button>
+        </div>
+        <div class="range-row">
+          <span class="rlabel">IMPLIED VOLATILITY: <span id="dtIvVal">—</span></span>
+          <input type="range" id="dtIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('dt')" onchange="onIvChange('dt')">
+          <button class="range-reset" onclick="resetIv('dt')" title="Reset">&#8634;</button>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
+          <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
+          <span><span class="sw" style="background:#00e88f"></span>Profit</span>
+          <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
+          <span><span class="dot" style="background:#3d8bff">●</span>Current mark P&amp;L</span>
+        </div>
       </div>
-      <div class="legend">
-        <span><span class="dot" style="background:#e0a93f">A</span>Short strike (sold)</span>
-        <span><span class="dot" style="background:#4f8ef7">B</span>Long strike (bought)</span>
-        <span><span class="sw" style="background:#35c98f"></span>Profit</span>
-        <span><span class="sw" style="background:#e5566d"></span>Loss</span>
-        <span><span class="dot" style="background:#4f8ef7">●</span>Current mark P&amp;L</span>
-      </div>
+      <div id="dtTableView" style="display:none"></div>
+
       <h2 style="margin-top:20px">P&amp;L Over Time</h2>
       <div id="detailEquityChart"></div>
     </div>
   </div>
 </div>
+
+<!-- ============ STRIKE INFO MODAL ============ -->
+<div class="modal-backdrop" id="strikeInfoModal" onclick="closeStrikeInfoModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()" id="strikeInfoContent"></div>
+</div>
+
+<datalist id="ivTicks">
+  <option value="100" label="x1"></option>
+  <option value="200" label="x2"></option>
+  <option value="300" label="x3"></option>
+</datalist>
 
 <script>
 const REFRESH_MS = 15000;
@@ -328,7 +410,7 @@ async function loadStatus() {
   const data = await res.json();
 
   document.getElementById('simTag').innerHTML = data.config.useSimulatedBroker
-    ? '<span class="sim-tag">DRY RUN</span>' : '<span class="sim-tag" style="background:rgba(229,86,109,.15);color:var(--red)">LIVE</span>';
+    ? '<span class="sim-tag">DRY RUN</span>' : '<span class="sim-tag" style="background:rgba(255,61,94,.15);color:var(--red)">LIVE</span>';
 
   const status = data.instance.status ?? data.instance.Status;
   const badge = document.getElementById('statusBadge');
@@ -459,9 +541,17 @@ let currentExpirations = [];
 let selectedExpKey = null;
 let selectedExpirationDate = null;
 let currentChainOptions = [];
+let currentFullChain = null; // un-filtered chain (both rights) -- source for greeks/walls/GEX
 let activeLeg = 'short';
 let vsRangeFraction = 0.25;
 let dtRangeFraction = 0.25;
+let vsIvMultiplier = 1.0;
+let dtIvMultiplier = 1.0;
+let vsRulerShowAll = false;
+let vsViewMode = 'graph';
+let dtViewMode = 'graph';
+let vsWallsGex = null;
+let dtWallsGex = null;
 
 // ---- Small client-side cache: expirations/chain/quote lookups are re-hit constantly while
 // building a spread (switching Put/Call, dragging strikes, re-opening the same expiration) --
@@ -627,23 +717,74 @@ async function loadChainHint() {
     }
   }
 
+  currentFullChain = chain; // both rights, un-filtered -- source for greeks lookups and the call/put-wall + GEX overlay
   const opts = (chain.options || []).filter(o => o.right === right).sort((a, b) => a.strike - b.strike);
   currentChainOptions = opts;
+  vsRulerShowAll = false;
   if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; document.getElementById('vsStrikeRuler').innerHTML = ''; return; }
-  hint.textContent = `${opts.length} strikes available — drag A or B on the ruler (or click A/B, then click the ruler).`;
+  hint.textContent = `${opts.length} strikes available — drag A or B on the ruler, or click a strike for details.`;
   if (!document.getElementById('vsShortStrike').value) autoPickDefaultStrikes(opts, right);
   onStrikeInputChange();
 }
 
+// Only the liquid strikes (nonzero volume/OI), evenly sampled by rank so ITM/ATM/OTM are all
+// represented, capped at maxCount -- keeps the ruler from turning into an unreadable wall of
+// ticks on wide chains. The two currently-selected legs are always kept even if sampling would
+// otherwise have skipped them (a pill needs a tick to sit on).
+function selectRollingStrikes(opts, spot, shortStrike, longStrike, maxCount) {
+  maxCount = maxCount || 17;
+  const liquid = opts.filter(o => (o.volume || 0) > 0 || (o.openInterest || 0) > 0);
+  const pool = liquid.length >= Math.min(8, opts.length) ? liquid : opts;
+  const sorted = [...pool].sort((a, b) => a.strike - b.strike);
+  if (sorted.length <= maxCount) return sorted.map(o => o.strike);
+
+  const picked = new Set();
+  for (let i = 0; i < maxCount; i++) {
+    const idx = Math.round(i * (sorted.length - 1) / (maxCount - 1));
+    picked.add(sorted[idx].strike);
+  }
+  if (shortStrike != null && !isNaN(shortStrike)) picked.add(shortStrike);
+  if (longStrike != null && !isNaN(longStrike)) picked.add(longStrike);
+  return [...picked].sort((a, b) => a - b);
+}
+
+function isWideSpreadStrike(strike) {
+  const opt = currentChainOptions.find(o => o.strike === strike);
+  if (!opt || opt.bid == null || opt.ask == null || !opt.mid) return false;
+  return (opt.ask - opt.bid) / opt.mid >= 0.10;
+}
+
+function toggleRulerMode(which) {
+  if (which !== 'vs') return;
+  vsRulerShowAll = !vsRulerShowAll;
+  renderStrikeRulerFromChain();
+}
+
 function renderStrikeRulerFromChain() {
+  const shortStrike = parseFloat(document.getElementById('vsShortStrike').value);
+  const longStrike = parseFloat(document.getElementById('vsLongStrike').value);
+  const strikes = vsRulerShowAll
+    ? currentChainOptions.map(o => o.strike)
+    : selectRollingStrikes(currentChainOptions, currentSpot, shortStrike, longStrike, 17);
+
   renderStrikeRuler('vsStrikeRuler', {
-    strikes: currentChainOptions.map(o => o.strike),
-    shortStrike: parseFloat(document.getElementById('vsShortStrike').value),
-    longStrike: parseFloat(document.getElementById('vsLongStrike').value),
+    strikes,
+    shortStrike, longStrike,
+    shortWide: isWideSpreadStrike(shortStrike),
+    longWide: isWideSpreadStrike(longStrike),
     spot: currentSpot,
     right: document.getElementById('vsRight').value,
-    symbol: document.getElementById('vsSymbol').value.trim().toUpperCase()
+    symbol: document.getElementById('vsSymbol').value.trim().toUpperCase(),
+    wide: vsRulerShowAll
   });
+
+  const modeBtn = document.getElementById('vsRulerModeBtn');
+  if (currentChainOptions.length > 17) {
+    modeBtn.style.display = 'inline';
+    modeBtn.textContent = vsRulerShowAll ? 'Show liquid strikes only' : `Show all ${currentChainOptions.length} strikes`;
+  } else {
+    modeBtn.style.display = 'none';
+  }
 }
 
 // commit=false is used while actively dragging a strike handle: it re-renders the ruler
@@ -671,7 +812,7 @@ function currentBuildRequest() {
 async function previewSpread() {
   const req = currentBuildRequest();
   if (!req.expirationDate || isNaN(req.shortStrike) || isNaN(req.longStrike)) return;
-  const res = await fetch('/api/vertical-spread/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
+  const res = await fetch(`/api/vertical-spread/preview?ivMultiplier=${vsIvMultiplier}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
   const body = await res.json();
   if (!res.ok) { document.getElementById('vsPreviewBox').style.display = 'none'; document.getElementById('btnSaveSpread').disabled = true; return; }
 
@@ -685,10 +826,15 @@ async function previewSpread() {
     netCredit: netCreditTotal, margin, maxProfit: body.payoff.maxProfit, maxLoss: body.payoff.maxLoss,
     pop: body.payoff.probabilityOfProfit, breakeven: body.payoff.breakevenPrice, spot: body.payoff.currentUnderlyingPrice, right: req.right
   }));
+  renderGreeksStrip('vsGreeksStrip', body.shortLeg, body.longLeg);
+  document.getElementById('vsIvVal').textContent = Math.round((body.impliedVolatility || 0) * 100) + '%';
+
+  vsWallsGex = computeWallsAndGex(currentFullChain ? currentFullChain.options : [], body.payoff.currentUnderlyingPrice);
 
   const slider = document.getElementById('vsDateSlider');
   onVsDateSliderChange(slider.value);
   document.getElementById('btnSaveSpread').disabled = false;
+  if (vsViewMode === 'table') renderVsTable();
 }
 
 function onVsDateSliderChange(val) {
@@ -702,9 +848,96 @@ function onVsDateSliderChange(val) {
     primaryCurve: curve,
     maxProfit: payoff.maxProfit, maxLoss: payoff.maxLoss, breakevenPrice: payoff.breakevenPrice,
     currentUnderlyingPrice: payoff.currentUnderlyingPrice, currentMarkPnL: null,
-    shortStrike: req.shortStrike, longStrike: req.longStrike, rangeFraction: vsRangeFraction
+    shortStrike: req.shortStrike, longStrike: req.longStrike, rangeFraction: vsRangeFraction,
+    callWall: vsWallsGex ? vsWallsGex.callWall : null, putWall: vsWallsGex ? vsWallsGex.putWall : null
   });
+  renderGexChart('vsGexChart', { gexBars: vsWallsGex ? vsWallsGex.gexBars : [], currentUnderlyingPrice: payoff.currentUnderlyingPrice, rangeFraction: vsRangeFraction });
   document.getElementById('vsSliderLabel').textContent = t >= 0.999 ? 'At expiration' : (t <= 0.001 ? 'Today' : `${Math.round(t * 100)}% to expiration`);
+}
+
+// ---- IV "what-if" slider: the slider position is a multiplier (25%-300%, x1 = live chain
+// IV), the label shows the resulting effective IV%. oninput just updates the label locally;
+// onchange (fires once, on release) triggers the actual re-price so dragging doesn't hammer
+// the server. ----
+function onIvSliderInput(which) {
+  const slider = document.getElementById(which + 'IvSlider');
+  const mult = parseInt(slider.value) / 100;
+  // Live "×N" readout while dragging -- the real resulting IV% (returned by the server) takes
+  // over as the label once the drag ends and onIvChange commits the re-price.
+  document.getElementById(which + 'IvVal').textContent = '×' + mult.toFixed(2);
+}
+
+function resetIv(which) {
+  document.getElementById(which + 'IvSlider').value = 100;
+  onIvChange(which);
+}
+
+function onIvChange(which) {
+  const slider = document.getElementById(which + 'IvSlider');
+  const multiplier = parseInt(slider.value) / 100;
+  if (which === 'vs') { vsIvMultiplier = multiplier; previewSpread(); }
+  else { dtIvMultiplier = multiplier; reloadDetailTimeline(false); }
+}
+
+// ---- Call wall / put wall / gamma-exposure: computed client-side from the full (both-rights)
+// chain already fetched for the ruler/popup. GEX here is the common retail approximation
+// (call OI*gamma minus put OI*gamma per strike) -- a shape indicator of where dealer gamma
+// concentrates, not a precise dealer-positioning model. ----
+function computeWallsAndGex(fullChainOptions, spot) {
+  if (!fullChainOptions || !fullChainOptions.length) return null;
+  const calls = fullChainOptions.filter(o => o.right === 'Call');
+  const puts = fullChainOptions.filter(o => o.right === 'Put');
+
+  let callWall = null, callWallOi = -1;
+  for (const c of calls) { if ((c.openInterest || 0) > callWallOi) { callWallOi = c.openInterest || 0; callWall = c.strike; } }
+  let putWall = null, putWallOi = -1;
+  for (const p of puts) { if ((p.openInterest || 0) > putWallOi) { putWallOi = p.openInterest || 0; putWall = p.strike; } }
+
+  const strikes = [...new Set(fullChainOptions.map(o => o.strike))].sort((a, b) => a - b);
+  const gexBars = strikes.map(strike => {
+    const c = calls.find(o => o.strike === strike);
+    const p = puts.find(o => o.strike === strike);
+    const cGex = (c && c.gamma != null) ? (c.openInterest || 0) * c.gamma : 0;
+    const pGex = (p && p.gamma != null) ? (p.openInterest || 0) * p.gamma : 0;
+    return { strike, gex: cGex - pGex };
+  });
+  return { callWall, putWall, gexBars };
+}
+
+function renderGexChart(containerId, cfg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const bars = cfg.gexBars || [];
+  if (!bars.length) { el.innerHTML = ''; return; }
+
+  let xMin, xMax;
+  if (cfg.rangeFraction && cfg.currentUnderlyingPrice) {
+    xMin = cfg.currentUnderlyingPrice * (1 - cfg.rangeFraction);
+    xMax = cfg.currentUnderlyingPrice * (1 + cfg.rangeFraction);
+  } else {
+    const xs = bars.map(b => b.strike);
+    xMin = Math.min(...xs); xMax = Math.max(...xs);
+  }
+  const visible = bars.filter(b => b.strike >= xMin && b.strike <= xMax);
+  if (!visible.length) { el.innerHTML = ''; return; }
+
+  const w = 720, h = 70, padL = 64, padR = 24;
+  const xScale = x => padL + (x - xMin) / ((xMax - xMin) || 1) * (w - padL - padR);
+  const maxAbs = Math.max(1e-9, ...visible.map(b => Math.abs(b.gex)));
+  const midY = h / 2;
+  const barW = Math.max(2, (w - padL - padR) / visible.length * 0.7);
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="1"/>`;
+  visible.forEach(b => {
+    const x = xScale(b.strike);
+    const barH = Math.abs(b.gex) / maxAbs * (h / 2 - 4);
+    const y = b.gex >= 0 ? midY - barH : midY;
+    svg += `<rect x="${(x - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="#b26bff" fill-opacity="0.75"/>`;
+  });
+  svg += `<text x="${padL - 8}" y="${(midY + 3).toFixed(1)}" fill="#6b7280" font-size="9" text-anchor="end">GEX</text>`;
+  svg += `</svg>`;
+  el.innerHTML = svg;
 }
 
 function onRangeChange(which) {
@@ -796,20 +1029,51 @@ async function viewSpread(id) {
   panel.dataset.id = id;
   panel.scrollIntoView({ behavior: 'smooth' });
 
-  const [strategyRes, timelineRes, marksRes] = await Promise.all([
+  dtIvMultiplier = 1.0;
+  document.getElementById('dtIvSlider').value = 100;
+  dtRangeFraction = 0.25;
+  document.getElementById('dtRangeSlider').value = 25;
+  document.getElementById('dtRangeVal').textContent = '25';
+
+  const [strategyRes, marksRes] = await Promise.all([
     fetch(`/api/vertical-spread/${id}`),
-    fetch(`/api/vertical-spread/${id}/payoff-timeline?steps=8`),
     fetch(`/api/vertical-spread/${id}/marks?limit=200`)
   ]);
   const strategy = await strategyRes.json();
-  const timeline = await timelineRes.json();
   const marks = await marksRes.json();
-
   currentDetailStrategy = strategy;
-  currentTimeline = timeline;
 
   document.getElementById('detailTitle').textContent =
     `Spread #${id} — ${strategy.symbol} ${strategy.spreadType} ${strategy.shortStrike}/${strategy.longStrike} exp ${(strategy.expirationDate||'').substring(0,10)} (${strategy.status})`;
+
+  // Full (both-rights) chain for this expiration -- same cache the builder uses, so re-viewing
+  // a spread you just built off the same expiration costs nothing extra.
+  const expStr = (strategy.expirationDate || '').substring(0, 10);
+  const chainKey = strategy.symbol + '|' + expStr;
+  let chain = cacheGet('chain', chainKey);
+  if (!chain) {
+    try {
+      const cRes = await fetch(`/api/vertical-spread/chain?symbol=${encodeURIComponent(strategy.symbol)}&expiration=${expStr}`);
+      chain = await cRes.json();
+      cacheSet('chain', chainKey, chain);
+    } catch (e) { chain = null; }
+  }
+  currentFullChain = chain;
+
+  await reloadDetailTimeline(true);
+
+  renderEquityChart('detailEquityChart', marks);
+}
+
+async function reloadDetailTimeline(resetSlider) {
+  const id = document.getElementById('detailPanel').dataset.id;
+  if (!id) return;
+  const strategy = currentDetailStrategy || {};
+
+  const res = await fetch(`/api/vertical-spread/${id}/payoff-timeline?steps=8&ivMultiplier=${dtIvMultiplier}`);
+  const timeline = await res.json();
+  currentTimeline = timeline;
+  document.getElementById('dtIvVal').textContent = Math.round((timeline.impliedVolatility || 0) * 100) + '%';
 
   const netCreditTotal = (strategy.netCreditReceived ?? strategy.netCreditAtBuild) * strategy.contracts * 100;
   const margin = (strategy.width ?? Math.abs(strategy.shortStrike - strategy.longStrike)) * 100 * strategy.contracts;
@@ -820,15 +1084,23 @@ async function viewSpread(id) {
   if (timeline.currentMarkPnL != null) items.push({ icon: 'target', label: 'Mark P&L', value: fmtMoney(timeline.currentMarkPnL), cls: pnlClass(timeline.currentMarkPnL) });
   renderStatsStrip('dtStatsStrip', items);
 
+  const shortLegInfo = findChainLeg(currentFullChain, strategy.right, strategy.shortStrike);
+  const longLegInfo = findChainLeg(currentFullChain, strategy.right, strategy.longStrike);
+  renderGreeksStrip('dtGreeksStrip', shortLegInfo, longLegInfo);
+
+  dtWallsGex = computeWallsAndGex(currentFullChain ? currentFullChain.options : [], timeline.currentUnderlyingPrice);
+
   const slider = document.getElementById('detailDateSlider');
   slider.max = timeline.steps.length - 1;
-  slider.value = slider.max;
-  dtRangeFraction = 0.25;
-  document.getElementById('dtRangeSlider').value = 25;
-  document.getElementById('dtRangeVal').textContent = '25';
+  if (resetSlider) slider.value = slider.max;
   onDateSliderChange(slider.value);
 
-  renderEquityChart('detailEquityChart', marks);
+  if (dtViewMode === 'table') renderDtTable();
+}
+
+function findChainLeg(chain, right, strike) {
+  if (!chain || !chain.options) return null;
+  return chain.options.find(o => o.right === right && o.strike === strike) || null;
 }
 
 function onDateSliderChange(idx) {
@@ -846,8 +1118,11 @@ function onDateSliderChange(idx) {
     currentMarkPnL: currentTimeline.currentMarkPnL,
     rangeFraction: dtRangeFraction,
     shortStrike: strategy.shortStrike,
-    longStrike: strategy.longStrike
+    longStrike: strategy.longStrike,
+    callWall: dtWallsGex ? dtWallsGex.callWall : null,
+    putWall: dtWallsGex ? dtWallsGex.putWall : null
   });
+  renderGexChart('dtGexChart', { gexBars: dtWallsGex ? dtWallsGex.gexBars : [], currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice, rangeFraction: dtRangeFraction });
 
   const d = new Date(step.asOfDate);
   const label = idx === 0 ? 'Today' : (step.daysToExpiration === 0 ? 'Expiration' : `${d.toLocaleDateString()} (${step.daysToExpiration}d left)`);
@@ -887,6 +1162,180 @@ function buildStatItems(d) {
   ];
 }
 
+// Net greeks = long leg minus short leg (you're long 1x the long leg, short 1x the short leg)
+// -- same signed convention VerticalSpreadPricingService.ComputeMark uses for net delta.
+function renderGreeksStrip(containerId, shortLeg, longLeg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!shortLeg && !longLeg) { el.innerHTML = ''; return; }
+  const netDelta = (longLeg?.delta ?? 0) - (shortLeg?.delta ?? 0);
+  const netGamma = (longLeg?.gamma ?? 0) - (shortLeg?.gamma ?? 0);
+  const netTheta = (longLeg?.theta ?? 0) - (shortLeg?.theta ?? 0);
+  const netVega = (longLeg?.vega ?? 0) - (shortLeg?.vega ?? 0);
+  renderStatsStrip(containerId, [
+    { icon: 'target', label: 'Net Delta', value: netDelta.toFixed(3) },
+    { icon: 'target', label: 'Net Gamma', value: netGamma.toFixed(4) },
+    { icon: 'down', label: 'Net Theta', value: netTheta.toFixed(3) },
+    { icon: 'up', label: 'Net Vega', value: netVega.toFixed(3) }
+  ]);
+}
+
+// ---- Graph/Table view toggle ----
+
+function setViewMode(which, mode) {
+  if (which === 'vs') vsViewMode = mode; else dtViewMode = mode;
+  document.getElementById(which + 'ViewBtn-graph').classList.toggle('active', mode === 'graph');
+  document.getElementById(which + 'ViewBtn-table').classList.toggle('active', mode === 'table');
+  document.getElementById(which + 'GraphView').style.display = mode === 'graph' ? 'block' : 'none';
+  document.getElementById(which + 'TableView').style.display = mode === 'table' ? 'block' : 'none';
+  if (mode === 'table') { if (which === 'vs') renderVsTable(); else renderDtTable(); }
+}
+
+// Preview (unsaved candidate) doesn't have a saved-id timeline endpoint to hit, so the table
+// view interpolates the same way the date slider does: a handful of evenly-spaced points
+// between the Today and AtExpiration curves already returned by /preview.
+function buildPreviewTimelineSteps(payoff, count) {
+  count = count || 6;
+  const steps = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    const curve = payoff.today.map((p, idx) => ({ underlyingPrice: p.underlyingPrice, pnL: pnlOf(p) * (1 - t) + pnlOf(payoff.atExpiration[idx]) * t }));
+    steps.push({ label: t === 0 ? 'Today' : (t === 1 ? 'Expir.' : Math.round(t * 100) + '%'), curve });
+  }
+  return steps;
+}
+
+function renderVsTable() {
+  const payoff = window._lastPreviewPayoff;
+  const req = window._lastPreviewReq;
+  if (!payoff || !req) { document.getElementById('vsTableView').innerHTML = ''; return; }
+  const steps = buildPreviewTimelineSteps(payoff, 6);
+  renderPayoffTable('vsTableView', {
+    steps, shortStrike: req.shortStrike, longStrike: req.longStrike,
+    breakevenPrice: payoff.breakevenPrice, currentUnderlyingPrice: payoff.currentUnderlyingPrice
+  });
+}
+
+function renderDtTable() {
+  if (!currentTimeline) { document.getElementById('dtTableView').innerHTML = ''; return; }
+  const strategy = currentDetailStrategy || {};
+  const steps = currentTimeline.steps.map(s => ({ label: s.daysToExpiration === 0 ? 'Expir.' : `${s.daysToExpiration}d`, curve: s.curve }));
+  renderPayoffTable('dtTableView', {
+    steps, shortStrike: strategy.shortStrike, longStrike: strategy.longStrike,
+    breakevenPrice: currentTimeline.breakevenPrice, currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice
+  });
+}
+
+// Strike (price) x date grid, color-coded green/red by P&L magnitude -- the "Table" view
+// alternative to the payoff chart, same underlying curves.
+function renderPayoffTable(containerId, cfg) {
+  const el = document.getElementById(containerId);
+  const steps = cfg.steps || [];
+  if (!steps.length || !steps[0].curve || !steps[0].curve.length) { el.innerHTML = '<div class="muted">No data.</div>'; return; }
+
+  const basePrices = steps[0].curve.map(p => p.underlyingPrice);
+  const n = basePrices.length;
+  const maxRows = 20;
+  const rowStep = Math.max(1, Math.floor(n / maxRows));
+  const rowIdxs = [];
+  for (let i = n - 1; i >= 0; i -= rowStep) rowIdxs.push(i);
+  if (rowIdxs[rowIdxs.length - 1] !== 0) rowIdxs.push(0);
+
+  const allPnl = steps.flatMap(s => s.curve.map(pnlOf));
+  const maxAbs = Math.max(1, ...allPnl.map(v => Math.abs(v)));
+  const colorFor = (v) => {
+    const t = Math.max(-1, Math.min(1, v / maxAbs));
+    return t >= 0 ? `rgba(0,232,143,${(0.12 + t * 0.55).toFixed(2)})` : `rgba(255,61,94,${(0.12 + -t * 0.55).toFixed(2)})`;
+  };
+
+  let html = '<div class="payoff-table-wrap"><table><thead><tr><th class="pricecol">Price</th>' +
+    steps.map(s => `<th>${s.label}</th>`).join('') + '</tr></thead><tbody>';
+  rowIdxs.forEach(idx => {
+    const price = basePrices[idx];
+    const pctFromSpot = cfg.currentUnderlyingPrice ? ((price - cfg.currentUnderlyingPrice) / cfg.currentUnderlyingPrice * 100) : null;
+    html += '<tr>';
+    html += `<td class="pricecol">$${price.toFixed(2)}${pctFromSpot != null ? `<div class="muted" style="font-size:9px">${pctFromSpot >= 0 ? '+' : ''}${pctFromSpot.toFixed(1)}%</div>` : ''}</td>`;
+    steps.forEach(s => {
+      const pnl = pnlOf(s.curve[idx]);
+      html += `<td style="background:${colorFor(pnl)}">${Math.round(pnl)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ---- Strike info popup: opened by clicking (not dragging) an A/B pill on the ruler. ----
+
+function openStrikeInfoPopup(leg) {
+  const strike = parseFloat(document.getElementById(leg === 'short' ? 'vsShortStrike' : 'vsLongStrike').value);
+  const opt = currentChainOptions.find(o => o.strike === strike);
+  const modal = document.getElementById('strikeInfoModal');
+  const content = document.getElementById('strikeInfoContent');
+  const symbol = document.getElementById('vsSymbol').value.trim().toUpperCase();
+  const right = document.getElementById('vsRight').value;
+  const suffix = right === 'Call' ? 'C' : 'P';
+  const legLabel = leg === 'short' ? 'A (short / sold)' : 'B (long / bought)';
+
+  if (!opt) {
+    content.innerHTML = `<h3>${symbol} ${isNaN(strike) ? '' : strike}${suffix}</h3><div class="muted" style="font-size:12px">exp ${selectedExpirationDate || ''} &middot; leg ${legLabel}</div>` +
+      `<div class="muted" style="margin-top:10px">No live quote for this strike right now.</div>` +
+      `<div class="modal-actions"><button class="btn-muted" onclick="closeStrikeInfoModal()">Close</button></div>`;
+    modal.classList.add('open');
+    return;
+  }
+
+  const spreadPct = (opt.bid != null && opt.ask != null && opt.mid) ? (opt.ask - opt.bid) / opt.mid : null;
+  const wide = spreadPct != null && spreadPct >= 0.10;
+
+  let html = `<h3>${symbol} ${opt.strike}${suffix}</h3><div class="muted" style="font-size:12px">exp ${selectedExpirationDate || ''} &middot; leg ${legLabel}</div>`;
+  if (wide) html += `<div class="modal-warn">&#9888; Wide bid/ask spread (${(spreadPct * 100).toFixed(0)}%)</div>`;
+  html += `<div class="modal-grid">
+    <div><div class="mk">Bid</div><div class="mv green">${fmtMoney(opt.bid)}</div></div>
+    <div><div class="mk">Ask</div><div class="mv red">${fmtMoney(opt.ask)}</div></div>
+    <div><div class="mk">Volume</div><div class="mv">${opt.volume ?? '—'}</div></div>
+    <div><div class="mk">Open Interest</div><div class="mv">${opt.openInterest ?? '—'}</div></div>
+    <div><div class="mk">IV</div><div class="mv">${opt.impliedVolatility != null ? (opt.impliedVolatility * 100).toFixed(1) + '%' : '—'}</div></div>
+    <div><div class="mk">Delta</div><div class="mv">${opt.delta != null ? opt.delta.toFixed(3) : '—'}</div></div>
+    <div><div class="mk">Gamma</div><div class="mv">${opt.gamma != null ? opt.gamma.toFixed(4) : '—'}</div></div>
+    <div><div class="mk">Theta</div><div class="mv">${opt.theta != null ? opt.theta.toFixed(3) : '—'}</div></div>
+    <div><div class="mk">Vega</div><div class="mv">${opt.vega != null ? opt.vega.toFixed(3) : '—'}</div></div>
+  </div>`;
+
+  const monthKeys = [...new Set(currentExpirations.map(e => e.date.substring(0, 7)))];
+  html += `<div class="block-label" style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:6px">Change expiration</div>`;
+  html += `<div class="exp-months">${monthKeys.map(k => {
+    const d = new Date(k + '-01T00:00:00');
+    return `<button class="exp-btn ${k === selectedExpKey ? 'active' : ''}" onclick="popupSelectMonth('${k}')">${d.toLocaleDateString(undefined, { month: 'short' })}</button>`;
+  }).join('')}</div>`;
+  html += `<div class="exp-days" id="popupExpDays">${popupDayButtonsHtml()}</div>`;
+
+  html += `<div class="modal-actions"><button class="btn-muted" onclick="closeStrikeInfoModal()">Close</button></div>`;
+  content.innerHTML = html;
+  modal.classList.add('open');
+}
+
+function popupDayButtonsHtml() {
+  return currentExpirations.filter(e => e.date.substring(0, 7) === selectedExpKey).map(e => {
+    const day = parseInt(e.date.substring(8, 10));
+    return `<button class="exp-btn ${e.date === selectedExpirationDate ? 'active' : ''}" onclick="popupSelectExpiration('${e.date}')">${day}</button>`;
+  }).join('');
+}
+
+function popupSelectMonth(key) {
+  selectedExpKey = key;
+  document.getElementById('popupExpDays').innerHTML = popupDayButtonsHtml();
+}
+
+function popupSelectExpiration(date) {
+  closeStrikeInfoModal();
+  selectExpiration(date);
+}
+
+function closeStrikeInfoModal(ev) {
+  document.getElementById('strikeInfoModal').classList.remove('open');
+}
+
 // ---- Strike-picker ruler: a horizontal number line of available strikes with A/B pill
 // badges for the short/long legs and a triangle marker at the current spot. The A/B pills are
 // real drag handles (mousedown on a pill, drag, release) -- grabbing a pill directly always
@@ -897,26 +1346,31 @@ function buildStatItems(d) {
 
 let rulerLayout = null;
 let rulerDragLeg = null;
+let rulerDragStart = null;
 
 function renderStrikeRuler(containerId, cfg) {
   const el = document.getElementById(containerId);
   const strikes = cfg.strikes || [];
   if (!strikes.length) { el.innerHTML = '<div class="muted" style="font-size:12px">No strikes loaded.</div>'; return; }
 
-  const w = 720, h = 90, padL = 24, padR = 24, midY = 45;
+  // "Show all strikes" mode renders at a fixed pixel width (wider than the container) instead
+  // of 100%, so the .ruler-scroll wrapper's overflow-x:auto kicks in and the ruler becomes a
+  // scrollable/"rolling" control -- the default filtered view never needs to scroll.
+  const w = cfg.wide ? Math.max(720, strikes.length * 26) : 720;
+  const h = 90, padL = 24, padR = 24, midY = 45;
   const xs = strikes.concat(cfg.spot ? [cfg.spot] : []);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const span = (xMax - xMin) || 1;
   const xScale = x => padL + (x - xMin) / span * (w - padL - padR);
   rulerLayout = { w, padL, padR, xMin, span, strikes };
 
-  let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;cursor:pointer">`;
+  let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="${cfg.wide ? w : '100%'}" height="${h}" style="overflow:visible;cursor:pointer">`;
   svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="2"/>`;
   strikes.forEach(s => {
     const x = xScale(s);
     svg += `<line x1="${x.toFixed(1)}" y1="${midY - 5}" x2="${x.toFixed(1)}" y2="${midY + 5}" stroke="#4a5060" stroke-width="1"/>`;
   });
-  const labelEvery = Math.max(1, Math.ceil(strikes.length / 12));
+  const labelEvery = cfg.wide ? 1 : Math.max(1, Math.ceil(strikes.length / 12));
   strikes.forEach((s, i) => {
     if (i % labelEvery !== 0) return;
     const x = xScale(s);
@@ -931,15 +1385,16 @@ function renderStrikeRuler(containerId, cfg) {
     if (strike == null || isNaN(strike)) return '';
     const x = xScale(strike);
     const y = above ? midY - 30 : midY + 30;
+    const pw = Math.max(40, label.length * 6.5 + 12);
     return `<g data-leg="${leg}" style="cursor:grab">` +
       `<line x1="${x.toFixed(1)}" y1="${(above ? y + 9 : midY + 5).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(above ? midY - 5 : y - 9).toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="2,2"/>` +
-      `<rect x="${(x - 22).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="44" height="18" rx="9" fill="${color}"/>` +
+      `<rect x="${(x - pw / 2).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${pw.toFixed(1)}" height="18" rx="9" fill="${color}"/>` +
       `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>` +
       `</g>`;
   };
   const suffix = cfg.right === 'Call' ? 'C' : 'P';
-  svg += pill(cfg.shortStrike, `A ${cfg.shortStrike ?? ''}${suffix}`, '#e0a93f', true, 'short');
-  svg += pill(cfg.longStrike, `B ${cfg.longStrike ?? ''}${suffix}`, '#4f8ef7', false, 'long');
+  svg += pill(cfg.shortStrike, `A ${cfg.shortStrike ?? ''}${suffix}${cfg.shortWide ? ' ⚠' : ''}`, '#ffb020', true, 'short');
+  svg += pill(cfg.longStrike, `B ${cfg.longStrike ?? ''}${suffix}${cfg.longWide ? ' ⚠' : ''}`, '#3d8bff', false, 'long');
   svg += `</svg>`;
   el.innerHTML = svg;
 
@@ -968,13 +1423,16 @@ function applyRulerPosition(ev, svgEl, commit) {
 }
 
 // Grabbing a pill (data-leg on the <g>) always drags that leg; mousedown on empty track falls
-// back to whichever leg the A/B toggle buttons currently have active.
+// back to whichever leg the A/B toggle buttons currently have active. rulerDragStart tracks
+// where the drag began so mouseup (below) can tell a plain click on a pill (opens the info
+// popup) apart from an actual drag (commits a new strike).
 function onRulerMouseDown(ev) {
   const svgEl = ev.currentTarget;
   const handle = ev.target.closest && ev.target.closest('[data-leg]');
   const leg = handle ? handle.getAttribute('data-leg') : activeLeg;
   setActiveLeg(leg);
   rulerDragLeg = leg;
+  rulerDragStart = { x: ev.clientX, y: ev.clientY, wasHandle: !!handle };
   applyRulerPosition(ev, svgEl, false);
   ev.preventDefault();
 }
@@ -986,10 +1444,18 @@ document.addEventListener('mousemove', (ev) => {
   const svgEl = document.getElementById('vsStrikeRuler-svg');
   if (svgEl) applyRulerPosition(ev, svgEl, false);
 });
-document.addEventListener('mouseup', () => {
+document.addEventListener('mouseup', (ev) => {
   if (!rulerDragLeg) return;
+  const leg = rulerDragLeg;
+  const start = rulerDragStart;
   rulerDragLeg = null;
-  previewSpread(); // commit: exactly one network call, at drag end
+  rulerDragStart = null;
+  const moved = start ? Math.hypot(ev.clientX - start.x, ev.clientY - start.y) : 999;
+  if (start && start.wasHandle && moved < 5) {
+    openStrikeInfoPopup(leg); // plain click on an already-placed pill -- show its info instead of a no-op commit
+  } else {
+    previewSpread(); // drag commit: exactly one network call, at drag end
+  }
 });
 
 // ---- Lightweight inline-SVG payoff chart (no external chart library) ----
@@ -1012,7 +1478,7 @@ function renderPayoffChart(containerId, cfg) {
     if (filtered.length >= 2) primary = filtered;
   }
 
-  const w = 720, h = 340, padL = 64, padR = 24, padT = 46, padB = 34;
+  const w = 720, h = 358, padL = 64, padR = 24, padT = 46, padB = 34;
   const xs = primary.map(p => p.underlyingPrice);
   const ys = primary.map(pnlOf).concat([0]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
@@ -1040,12 +1506,12 @@ function renderPayoffChart(containerId, cfg) {
     <clipPath id="${clipBelow}"><rect x="0" y="${zeroY.toFixed(1)}" width="${w}" height="${Math.max(0, h - zeroY).toFixed(1)}"/></clipPath>
     <clipPath id="${clipAbove}"><rect x="0" y="0" width="${w}" height="${Math.max(0, zeroY).toFixed(1)}"/></clipPath>
     <linearGradient id="${gradId}_g" x1="0" y1="${zeroY.toFixed(1)}" x2="0" y2="${padT}" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#35c98f" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#35c98f" stop-opacity="0.02"/>
+      <stop offset="0%" stop-color="#00e88f" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#00e88f" stop-opacity="0.02"/>
     </linearGradient>
     <linearGradient id="${gradId}_r" x1="0" y1="${zeroY.toFixed(1)}" x2="0" y2="${(h - padB).toFixed(1)}" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#e5566d" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#e5566d" stop-opacity="0.05"/>
+      <stop offset="0%" stop-color="#ff3d5e" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ff3d5e" stop-opacity="0.05"/>
     </linearGradient>
   </defs>`;
 
@@ -1065,8 +1531,8 @@ function renderPayoffChart(containerId, cfg) {
   }
   svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w - padR}" y2="${zeroY.toFixed(1)}" stroke="#4a5060" stroke-width="1"/>`;
 
-  svg += `<path d="${linePath(primary)}" fill="none" stroke="#35c98f" stroke-width="2.5" clip-path="url(#${clipAbove})"/>`;
-  svg += `<path d="${linePath(primary)}" fill="none" stroke="#e5566d" stroke-width="2.5" clip-path="url(#${clipBelow})"/>`;
+  svg += `<path d="${linePath(primary)}" fill="none" stroke="#00e88f" stroke-width="2.5" clip-path="url(#${clipAbove})"/>`;
+  svg += `<path d="${linePath(primary)}" fill="none" stroke="#ff3d5e" stroke-width="2.5" clip-path="url(#${clipBelow})"/>`;
 
   const strikeMarker = (strike, label, color) => {
     if (strike == null || isNaN(strike)) return '';
@@ -1076,8 +1542,21 @@ function renderPayoffChart(containerId, cfg) {
       `<circle cx="${x.toFixed(1)}" cy="${(padT - 18).toFixed(1)}" r="8" fill="${color}"/>` +
       `<text x="${x.toFixed(1)}" y="${(padT - 14).toFixed(1)}" fill="#0f1115" font-size="10" font-weight="700" text-anchor="middle">${label}</text>`;
   };
-  svg += strikeMarker(cfg.shortStrike, 'A', '#e0a93f');
-  svg += strikeMarker(cfg.longStrike, 'B', '#4f8ef7');
+  svg += strikeMarker(cfg.shortStrike, 'A', '#ffb020');
+  svg += strikeMarker(cfg.longStrike, 'B', '#3d8bff');
+
+  // Call wall / put wall: the OI-heaviest call/put strike for this expiration -- often watched
+  // as informal resistance/support levels. Computed client-side (computeWallsAndGex) from the
+  // full both-rights chain, independent of which right this spread itself trades.
+  const wallLine = (strike, text, color) => {
+    if (strike == null) return '';
+    const x = xScale(strike);
+    if (x < padL || x > w - padR) return '';
+    return `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h - padB}" stroke="${color}" stroke-width="1.2" stroke-dasharray="6,3" opacity="0.55"/>` +
+      `<text x="${x.toFixed(1)}" y="${(h - 8).toFixed(1)}" fill="${color}" font-size="8" font-weight="700" text-anchor="middle">${text}</text>`;
+  };
+  svg += wallLine(cfg.callWall, 'CALL WALL', '#22e6e6');
+  svg += wallLine(cfg.putWall, 'PUT WALL', '#ffb020');
 
   if (cfg.breakevenPrice !== null && cfg.breakevenPrice !== undefined) {
     const bx = xScale(cfg.breakevenPrice);
@@ -1093,11 +1572,11 @@ function renderPayoffChart(containerId, cfg) {
   }
 
   if (cfg.currentMarkPnL !== null && cfg.currentMarkPnL !== undefined && spotX >= padL && spotX <= w - padR) {
-    svg += `<circle cx="${spotX.toFixed(1)}" cy="${yScale(cfg.currentMarkPnL).toFixed(1)}" r="5" fill="#4f8ef7" stroke="#0f1115" stroke-width="1.5"/>`;
+    svg += `<circle cx="${spotX.toFixed(1)}" cy="${yScale(cfg.currentMarkPnL).toFixed(1)}" r="5" fill="#3d8bff" stroke="#0f1115" stroke-width="1.5"/>`;
   }
 
-  svg += `<text x="${padL}" y="${h - 10}" fill="#8b93a1" font-size="10">$${xMin.toFixed(2)}</text>`;
-  svg += `<text x="${w - padR}" y="${h - 10}" fill="#8b93a1" font-size="10" text-anchor="end">$${xMax.toFixed(2)}</text>`;
+  svg += `<text x="${padL}" y="${h - 22}" fill="#8b93a1" font-size="10">$${xMin.toFixed(2)}</text>`;
+  svg += `<text x="${w - padR}" y="${h - 22}" fill="#8b93a1" font-size="10" text-anchor="end">$${xMax.toFixed(2)}</text>`;
   svg += `</svg><div class="chart-tooltip" id="${containerId}-tooltip" style="display:none"></div>`;
 
   el.innerHTML = svg;
@@ -1140,7 +1619,7 @@ function renderEquityChart(containerId, marks) {
 
   let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
   svg += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#2a2e38" stroke-dasharray="4,3"/>`;
-  svg += `<path d="${path}" fill="none" stroke="${(last.unrealizedPnL ?? 0) >= 0 ? '#35c98f' : '#e5566d'}" stroke-width="2"/>`;
+  svg += `<path d="${path}" fill="none" stroke="${(last.unrealizedPnL ?? 0) >= 0 ? '#00e88f' : '#ff3d5e'}" stroke-width="2"/>`;
   svg += `<text x="${padL}" y="${h-6}" fill="#8b93a1" font-size="10">${new Date(marks[0].markUtc).toLocaleDateString()}</text>`;
   svg += `<text x="${w-padR}" y="${h-6}" fill="#8b93a1" font-size="10" text-anchor="end">${new Date(last.markUtc).toLocaleDateString()}</text>`;
   svg += `</svg>`;

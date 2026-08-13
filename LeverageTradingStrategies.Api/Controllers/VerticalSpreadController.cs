@@ -110,7 +110,8 @@ namespace LeverageTradingStrategies.Api.Controllers
                 maxRiskPerSpread = result.MaxRisk,
                 shortLeg = LegSummary(result.ShortLeg!),
                 longLeg = LegSummary(result.LongLeg!),
-                payoff = result.Payoff
+                payoff = result.Payoff,
+                impliedVolatility = result.ImpliedVolatilityUsed
             });
         }
 
@@ -331,6 +332,7 @@ namespace LeverageTradingStrategies.Api.Controllers
                 currentUnderlyingPrice = underlyingPrice,
                 currentMarkPnL,
                 probabilityOfProfit = last?.ProbabilityOfProfit,
+                impliedVolatility = iv,
                 steps = timelineSteps
             });
         }
@@ -384,10 +386,14 @@ namespace LeverageTradingStrategies.Api.Controllers
 
             var payoff = _pricingService.BuildPayoff(right, request.ShortStrike, request.LongStrike, netCredit, request.Contracts, underlyingPrice, yearsToExpiry, iv, currentMarkPnL: null, shortLegDelta: shortLeg.Delta);
 
-            return SpreadBuildResult.Ok(shortLeg, longLeg, spreadType, netCredit, maxRisk, payoff);
+            return SpreadBuildResult.Ok(shortLeg, longLeg, spreadType, netCredit, maxRisk, payoff, iv);
         }
 
-        private static object LegSummary(OptionContractDto leg) => new { leg.Symbol, leg.Strike, leg.Bid, leg.Ask, leg.Mid, leg.Delta, leg.ImpliedVolatility, leg.OpenInterest, leg.Volume };
+        private static object LegSummary(OptionContractDto leg) => new
+        {
+            leg.Symbol, leg.Strike, leg.Bid, leg.Ask, leg.Mid, leg.Delta, leg.Gamma, leg.Theta, leg.Vega,
+            leg.ImpliedVolatility, leg.OpenInterest, leg.Volume, leg.HasValidBidAsk
+        };
 
         // This project has no global JsonStringEnumConverter configured (see TqqqWeeklyController,
         // which explicitly calls .ToString() on every enum it returns for the same reason) --
@@ -490,11 +496,12 @@ namespace LeverageTradingStrategies.Api.Controllers
             public decimal NetCredit { get; private init; }
             public decimal MaxRisk { get; private init; }
             public VerticalSpreadPayoff? Payoff { get; private init; }
+            public double ImpliedVolatilityUsed { get; private init; }
 
             public static SpreadBuildResult Fail(string error) => new() { Success = false, Error = error };
 
-            public static SpreadBuildResult Ok(OptionContractDto shortLeg, OptionContractDto longLeg, VerticalSpreadType spreadType, decimal netCredit, decimal maxRisk, VerticalSpreadPayoff payoff) =>
-                new() { Success = true, ShortLeg = shortLeg, LongLeg = longLeg, SpreadType = spreadType, NetCredit = netCredit, MaxRisk = maxRisk, Payoff = payoff };
+            public static SpreadBuildResult Ok(OptionContractDto shortLeg, OptionContractDto longLeg, VerticalSpreadType spreadType, decimal netCredit, decimal maxRisk, VerticalSpreadPayoff payoff, double impliedVolatilityUsed) =>
+                new() { Success = true, ShortLeg = shortLeg, LongLeg = longLeg, SpreadType = spreadType, NetCredit = netCredit, MaxRisk = maxRisk, Payoff = payoff, ImpliedVolatilityUsed = impliedVolatilityUsed };
         }
     }
 }
