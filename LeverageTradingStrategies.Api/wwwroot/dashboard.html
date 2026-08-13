@@ -635,6 +635,18 @@ async function loadTicker(force) {
 }
 
 async function onSymbolChange() {
+  // Strikes are symbol-specific prices (e.g. TSLA ~$460 vs SPY ~$650) -- if we didn't clear
+  // these, the old symbol's strike values would carry straight into the new symbol's chain and
+  // range map, landing miles outside the new min/max (or matching nothing in
+  // currentChainOptions at all). That's what was pushing the strike ruler's handles/connect bar
+  // out past the left edge of the panel, and also why the payoff graph didn't refresh with a
+  // sensible default. Clearing them here lets loadChainHint's existing "if empty, auto-pick"
+  // logic (same pattern onRightChange already uses) pick fresh ~0.30-delta defaults for
+  // whichever symbol/expiration just loaded, so a default payoff graph always shows.
+  document.getElementById('vsShortStrike').value = '';
+  document.getElementById('vsLongStrike').value = '';
+  document.getElementById('vsPreviewBox').style.display = 'none';
+  document.getElementById('btnSaveSpread').disabled = true;
   await loadTicker();
   await loadExpirations();
 }
