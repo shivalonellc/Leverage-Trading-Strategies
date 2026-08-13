@@ -64,26 +64,26 @@ namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 
             return new TqqqAgentMarketSnapshot
             {
-                LastPrice = lastPrice,
-                Vwap = ComputeCumulativeVwap(tqqqBars, lastPrice),
-                Ema9 = tqqqBars.Count > 0 ? ComputeEma(tqqqCloses, 9) : lastPrice,
-                Ema20 = tqqqBars.Count > 0 ? ComputeEma(tqqqCloses, 20) : lastPrice,
-                Rsi14 = ComputeRsi(tqqqCloses, 14),
-                Macd = macd,
-                MacdSignal = macdSignal,
-                MacdHistogram = macdHist,
-                Atr14 = ComputeAtr(tqqqBars, 14),
-                DayHigh = dayHigh,
-                DayLow = dayLow,
-                OpenPrice = openPrice,
-                PriorClose = priorClose,
-                GapFromPriorClosePct = priorClose > 0 ? (openPrice - priorClose) / priorClose * 100m : 0m,
-                DistanceFromOpenPct = openPrice > 0 ? (lastPrice - openPrice) / openPrice * 100m : 0m,
-                RelativeVolume = ComputeRelativeVolume(tqqqQuote, minutesSinceOpen),
+                LastPrice = Round3(lastPrice),
+                Vwap = Round3(ComputeCumulativeVwap(tqqqBars, lastPrice)),
+                Ema9 = Round3(tqqqBars.Count > 0 ? ComputeEma(tqqqCloses, 9) : lastPrice),
+                Ema20 = Round3(tqqqBars.Count > 0 ? ComputeEma(tqqqCloses, 20) : lastPrice),
+                Rsi14 = Round3(ComputeRsi(tqqqCloses, 14)),
+                Macd = Round3(macd),
+                MacdSignal = Round3(macdSignal),
+                MacdHistogram = Round3(macdHist),
+                Atr14 = Round3(ComputeAtr(tqqqBars, 14)),
+                DayHigh = Round3(dayHigh),
+                DayLow = Round3(dayLow),
+                OpenPrice = Round3(openPrice),
+                PriorClose = Round3(priorClose),
+                GapFromPriorClosePct = Round3(priorClose > 0 ? (openPrice - priorClose) / priorClose * 100m : 0m),
+                DistanceFromOpenPct = Round3(openPrice > 0 ? (lastPrice - openPrice) / openPrice * 100m : 0m),
+                RelativeVolume = Round3(ComputeRelativeVolume(tqqqQuote, minutesSinceOpen)),
 
-                QqqLastPrice = qqqLast,
-                QqqVwap = qqqVwap,
-                QqqEma20 = qqqEma20,
+                QqqLastPrice = Round3(qqqLast),
+                QqqVwap = Round3(qqqVwap),
+                QqqEma20 = Round3(qqqEma20),
                 QqqAboveVwap = qqqLast >= qqqVwap,
                 QqqAboveEma20 = qqqLast >= qqqEma20,
 
@@ -91,6 +91,13 @@ namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
                 MinutesUntilForceFlatten = minutesUntilFlatten
             };
         }
+
+        // Rounded once here at the boundary where indicators leave the calculation pipeline
+        // (not inside ComputeEma/ComputeEmaSeries etc.) so chained math like MACD's fast/slow
+        // EMA subtraction still runs on full decimal precision internally -- only the final
+        // values handed to Claude/persisted to TqqqAgentDecisions get truncated for readability.
+        private static decimal Round3(decimal v) => Math.Round(v, 3, MidpointRounding.AwayFromZero);
+        private static decimal? Round3(decimal? v) => v.HasValue ? Math.Round(v.Value, 3, MidpointRounding.AwayFromZero) : null;
 
         private static decimal? ComputeRelativeVolume(TradierQuoteDto? quote, int minutesSinceOpen)
         {

@@ -34,7 +34,7 @@ namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 
             var holding = position != null;
             var quantity = position != null ? (int)position.Quantity : 0;
-            var entryPrice = position != null && position.Quantity != 0 ? position.CostBasis / position.Quantity : (decimal?)null;
+            var entryPrice = position != null && position.Quantity != 0 ? Math.Round(position.CostBasis / position.Quantity, 3, MidpointRounding.AwayFromZero) : (decimal?)null;
 
             return new TqqqAgentPortfolioSnapshot
             {
