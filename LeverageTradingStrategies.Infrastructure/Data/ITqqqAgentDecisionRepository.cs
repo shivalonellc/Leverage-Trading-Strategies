@@ -1,4 +1,4 @@
-using LeverageTradingStrategies.Domain.TqqqAgent;
+using LeverageTradingStrategies.Infrastructure.TqqqAgent;
 
 namespace LeverageTradingStrategies.Infrastructure.Data
 {

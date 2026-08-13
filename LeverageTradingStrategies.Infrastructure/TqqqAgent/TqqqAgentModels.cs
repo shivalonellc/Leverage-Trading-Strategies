@@ -1,4 +1,4 @@
-namespace LeverageTradingStrategies.Domain.TqqqAgent
+namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     /// <summary>What Claude (or the validator, when it overrides Claude) decided. Long-only,
     /// day-trade-only per TQQQ_Intraday_Agent_Spec_v1.md §3.</summary>

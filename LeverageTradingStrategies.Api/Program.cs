@@ -3,7 +3,6 @@ using LeverageTradingStrategies.Api.Jobs;
 using LeverageTradingStrategies.Domain.Options;
 using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
-using LeverageTradingStrategies.Domain.TqqqAgent;
 using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Data;

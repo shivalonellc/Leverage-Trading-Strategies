@@ -1,5 +1,3 @@
-using LeverageTradingStrategies.Domain.TqqqAgent;
-
 namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     /// <summary>Short-term "what have I been doing" memory Claude reads via get_recent_decisions

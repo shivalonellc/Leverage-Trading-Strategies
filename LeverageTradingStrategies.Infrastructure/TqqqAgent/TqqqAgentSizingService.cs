@@ -1,4 +1,4 @@
-namespace LeverageTradingStrategies.Domain.TqqqAgent
+namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     /// <summary>Spec §8 sizing formula, pulled out into its own tiny pure-math class rather than
     /// inlined in the validator or the job -- easy to unit-test the arithmetic in isolation

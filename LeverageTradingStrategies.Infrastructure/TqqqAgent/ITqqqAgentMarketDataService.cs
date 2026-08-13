@@ -1,5 +1,3 @@
-using LeverageTradingStrategies.Domain.TqqqAgent;
-
 namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     public interface ITqqqAgentMarketDataService

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using LeverageTradingStrategies.Domain.TqqqAgent;
 using LeverageTradingStrategies.Infrastructure.Data;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;

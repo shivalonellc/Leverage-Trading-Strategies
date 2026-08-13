@@ -1,4 +1,3 @@
-using LeverageTradingStrategies.Domain.TqqqAgent;
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Data;
 using LeverageTradingStrategies.Infrastructure.TqqqAgent;

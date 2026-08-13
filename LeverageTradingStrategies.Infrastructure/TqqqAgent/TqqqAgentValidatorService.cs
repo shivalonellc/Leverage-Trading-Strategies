@@ -1,4 +1,4 @@
-namespace LeverageTradingStrategies.Domain.TqqqAgent
+namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     /// <summary>Deterministic, no-LLM gate between Claude's decision and a real order -- this is
     /// the entire "Code decides" half of TQQQ_Intraday_Agent_Spec_v1.md's architecture diagram

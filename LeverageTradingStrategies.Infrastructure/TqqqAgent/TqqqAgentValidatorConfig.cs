@@ -1,9 +1,8 @@
-namespace LeverageTradingStrategies.Domain.TqqqAgent
+namespace LeverageTradingStrategies.Infrastructure.TqqqAgent
 {
     /// <summary>Plain DTO mirror of the AppSettings:TqqqAgent config the validator needs --
-    /// kept in Domain (no dependency on Infrastructure.Configuration) so
-    /// TqqqAgentValidatorService stays a pure, easily-testable class. The job maps
-    /// AppSettingsOptions.TqqqAgent onto this once per cycle.</summary>
+    /// kept dependency-free so TqqqAgentValidatorService stays a pure, easily-testable class.
+    /// The job maps AppSettingsOptions.TqqqAgent onto this once per cycle.</summary>
     public class TqqqAgentValidatorConfig
     {
         public int ConsecutiveLossLimit { get; set; } = 3;
