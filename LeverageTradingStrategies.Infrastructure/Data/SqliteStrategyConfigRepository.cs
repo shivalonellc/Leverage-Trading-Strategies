@@ -1,5 +1,3 @@
-using Microsoft.Data.Sqlite;
-
 namespace LeverageTradingStrategies.Infrastructure.Data
 {
     public class SqliteStrategyConfigRepository : IStrategyConfigRepository

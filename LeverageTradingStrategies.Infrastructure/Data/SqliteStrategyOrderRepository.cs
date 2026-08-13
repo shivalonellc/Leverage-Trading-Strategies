@@ -1,5 +1,4 @@
 using LeverageTradingStrategies.Infrastructure.Data.Entities;
-using Microsoft.Data.Sqlite;
 
 namespace LeverageTradingStrategies.Infrastructure.Data
 {

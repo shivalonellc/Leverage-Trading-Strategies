@@ -22,6 +22,20 @@ dotnet restore
 dotnet build
 ```
 
+## Configuration & secrets
+
+`LeverageTradingStrategies.Api/appsettings.json` is **gitignored** — it holds real credentials
+(Tradier token, Schwab account number, Anthropic API key) and must never be committed. On a
+fresh clone:
+
+```
+cp LeverageTradingStrategies.Api/appsettings.json.template LeverageTradingStrategies.Api/appsettings.json
+```
+
+then fill in the `REPLACE_WITH_*` placeholders with your real values. `appsettings.json.template`
+*is* tracked and should only ever contain placeholders — if you add a new config key with a real
+default, add the placeholder version to the template too, not a real value.
+
 ## Structure
 
 - `LeverageTradingStrategies.Domain/Tqqq/` — the strategy's decision logic

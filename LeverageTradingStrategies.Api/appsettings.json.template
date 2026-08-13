@@ -14,22 +14,22 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "LogFilePath": "E:\\iShare\\Development\\shivalone\\shivalonellc\\Leverage-Trading-Strategies\\logs\\trading-.log",
-    "SqliteDb": "Data Source=E:\\iShare\\Development\\shivalone\\shivalonellc\\Leverage-Trading-Strategies\\db\\leverage-trading.db",
+    "LogFilePath": "logs/trading-.log",
+    "SqliteDb": "Data Source=db/leverage-trading.db",
     "Redis": "localhost:6379"
   },
   "AppSettings": {
     "Trading": {
-      "SchwabTokenPath": "E:\\iShare\\Production\\Data\\SchwabTokens.json",
-      "AccountNumber": "REDACTED_SCHWAB_ACCOUNT_NUMBER",
+      "SchwabTokenPath": "REPLACE_WITH_PATH_TO_YOUR_SCHWAB_TOKENS_JSON",
+      "AccountNumber": "REPLACE_WITH_YOUR_SCHWAB_ACCOUNT_NUMBER",
       "UseSimulatedBroker": true
     },
     "Tradier": {
-      "Token": "REDACTED_TRADIER_TOKEN",
-      "AccountId": "REDACTED_TRADIER_ACCOUNT_ID",
-      "VirtualAccountId": "REDACTED_TRADIER_VIRTUAL_ACCOUNT_ID",
-      "VirtualToken": "REDACTED_TRADIER_VIRTUAL_TOKEN",
-      "UseSandbox": false
+      "Token": "REPLACE_WITH_YOUR_TRADIER_LIVE_TOKEN",
+      "AccountId": "REPLACE_WITH_YOUR_TRADIER_LIVE_ACCOUNT_ID",
+      "VirtualAccountId": "REPLACE_WITH_YOUR_TRADIER_SANDBOX_ACCOUNT_ID",
+      "VirtualToken": "REPLACE_WITH_YOUR_TRADIER_SANDBOX_TOKEN",
+      "UseSandbox": true
     },
     "VerticalSpread": {
       "Enabled": true,
