@@ -29,6 +29,9 @@
   .badge.Closed { background: rgba(139,147,161,.15); color: var(--muted); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
   .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .dt-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .dt-header-row h2 { margin: 0; }
+  .dt-header-row .link-btn { flex-shrink: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
@@ -139,19 +142,27 @@
   .ruler-toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
   .link-btn { background: none; border: none; color: var(--blue); font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; }
   .wide-spread-badge { display: inline-block; color: var(--amber); font-size: 10px; font-weight: 700; margin-left: 3px; }
-  .payoff-table-wrap { overflow-x: auto; }
-  .payoff-table-wrap table { font-size: 11px; }
-  .payoff-table-wrap th, .payoff-table-wrap td { padding: 5px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
+  /* font/padding come from --tbl-font/--tbl-pad-y/--tbl-pad-x, set inline per-render by
+     renderPayoffTable() -- it picks a density tier so the whole table (header + all rows)
+     always fits inside the fixed .view-pane height with no scrolling: roomier rows when there's
+     little data, tighter rows when there's a lot, instead of ever needing a scrollbar. */
+  .payoff-table-wrap { overflow-x: auto; overflow-y: hidden; height: 100%; }
+  .payoff-table-wrap table { font-size: var(--tbl-font, 11px); width: 100%; }
+  .payoff-table-wrap th, .payoff-table-wrap td { padding: var(--tbl-pad-y, 5px) var(--tbl-pad-x, 8px); text-align: center; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
   .payoff-table-wrap th.pricecol, .payoff-table-wrap td.pricecol { text-align: right; position: sticky; left: 0; background: var(--panel); border-right: 1px solid var(--border); }
   .payoff-table-wrap th.hlcol, .payoff-table-wrap td.hlcol { box-shadow: inset 0 0 0 2px var(--blue); }
   .wall-legend { display: flex; gap: 16px; font-size: 11px; margin-top: 6px; flex-wrap: wrap; }
   .wall-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .wall-legend .sw2 { width: 14px; height: 2px; display: inline-block; }
 
-  /* ---- Graph/Table share the same footprint so toggling doesn't resize the panel; sliders
-     live outside both panes so they drive whichever view is active. ---- */
+  /* ---- Graph/Table share the same fixed footprint so toggling doesn't resize the panel;
+     sliders live outside both panes so they drive whichever view is active. Fixed height (not
+     min/max + overflow-y:auto) -- the graph's own content (358px chart + 70px GEX strip +
+     legend) comfortably fits inside it, and the table compresses its own row density to fit the
+     same space, so neither pane should ever need to scroll. overflow:hidden is just a safety
+     net, not the primary fix. ---- */
   .view-stage { position: relative; }
-  .view-pane { min-height: 452px; max-height: 452px; overflow-y: auto; }
+  .view-pane { height: 480px; overflow: hidden; }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 200; }
   .modal-backdrop.open { display: flex; }
@@ -345,7 +356,10 @@
     </div>
 
     <div class="panel" id="detailPanel">
-      <h2 id="detailTitle">Spread Detail</h2>
+      <div class="dt-header-row">
+        <h2 id="detailTitle">Spread Detail</h2>
+        <button class="link-btn" onclick="closeDetailPanel()" style="font-size:13px">&times; Close</button>
+      </div>
       <div class="stats-strip" id="dtStatsStrip"></div>
       <div class="stats-strip" id="dtGreeksStrip" style="margin-top:0"></div>
 
@@ -1156,9 +1170,20 @@ async function loadSpreads() {
   const res = await fetch('/api/vertical-spread/list');
   const list = await res.json();
   const body = document.getElementById('spreadsBody');
-  if (!res.ok || !list.length) { body.innerHTML = '<tr><td colspan="9" class="muted">No spreads saved yet.</td></tr>'; return; }
+  if (!res.ok) { body.innerHTML = '<tr><td colspan="9" class="muted">Failed to load spreads.</td></tr>'; return; }
 
-  body.innerHTML = list.map(s => {
+  // Closed strategies and ones whose expiration has already passed are done -- they stay in the
+  // DB/marks history, just no reason to keep cluttering the active list with them.
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const visible = list.filter(s => {
+    if (s.status === 'Closed') return false;
+    const exp = (s.expirationDate || '').substring(0, 10);
+    if (exp && exp < todayStr) return false;
+    return true;
+  });
+  if (!visible.length) { body.innerHTML = '<tr><td colspan="9" class="muted">No active spreads.</td></tr>'; return; }
+
+  body.innerHTML = visible.map(s => {
     const netCredit = s.netCreditReceived ?? s.netCreditAtBuild;
     let actions = `<button class="small btn-blue" onclick="viewSpread(${s.id})">View</button>`;
     if (s.status === 'Paper') {
@@ -1197,14 +1222,29 @@ async function closeSpread(id) {
   const body = await res.json();
   if (!res.ok) alert('Close failed: ' + (body.message || res.status));
   loadSpreads();
-  if (document.getElementById('detailPanel').dataset.id == id) viewSpread(id);
+  // A just-closed strategy is about to drop out of the list (loadSpreads filters Closed out),
+  // so there's nothing left to refresh the detail view against -- close it instead.
+  if (document.getElementById('detailPanel').dataset.id == id) closeDetailPanel();
 }
 
 let currentTimeline = null;
 let currentDetailStrategy = null;
 
+function closeDetailPanel() {
+  const panel = document.getElementById('detailPanel');
+  panel.style.display = 'none';
+  delete panel.dataset.id;
+  currentDetailStrategy = null;
+  currentTimeline = null;
+}
+
+// viewSpread doubles as a toggle: clicking View/a row for the spread that's already open closes
+// it (mirrors the Graph/Table-style toggle button the user wants -- no separate "are you sure
+// you want to close this" step needed since re-clicking View reopens it with fresh data anyway).
 async function viewSpread(id) {
   const panel = document.getElementById('detailPanel');
+  if (panel.style.display === 'block' && panel.dataset.id == id) { closeDetailPanel(); return; }
+
   panel.style.display = 'block';
   panel.dataset.id = id;
   panel.scrollIntoView({ behavior: 'smooth' });
@@ -1426,6 +1466,17 @@ function renderDtTable() {
 // alternative to the payoff chart, same underlying curves. rangeFraction trims rows to the same
 // price window the RANGE slider applies to the chart; highlightT bolds the date column nearest
 // the Today/Expiration slider so all three sliders visibly drive the table, not just the graph.
+// Must stay in sync with the .view-pane CSS height -- this is the fixed pixel budget
+// renderPayoffTable() compresses/expands its row density to fit, so the table never scrolls.
+const TABLE_PANE_HEIGHT = 480;
+const TABLE_DENSITY_TIERS = [
+  { font: 11, padY: 5, padX: 8, rowH: 24 },
+  { font: 10, padY: 4, padX: 7, rowH: 21 },
+  { font: 9,  padY: 3, padX: 6, rowH: 18 },
+  { font: 8,  padY: 2, padX: 5, rowH: 15 },
+  { font: 7,  padY: 1, padX: 4, rowH: 12 }
+];
+
 function renderPayoffTable(containerId, cfg) {
   const el = document.getElementById(containerId);
   const steps = cfg.steps || [];
@@ -1447,6 +1498,16 @@ function renderPayoffTable(containerId, cfg) {
   for (let k = n - 1; k >= 0; k -= rowStep) rowIdxs.push(idxPool[k]);
   if (rowIdxs[rowIdxs.length - 1] !== idxPool[0]) rowIdxs.push(idxPool[0]);
 
+  // Pick the roomiest density tier whose header+rows still fit inside TABLE_PANE_HEIGHT with no
+  // scrolling -- rows expand (bigger font/padding) when there isn't much data, compress (smaller
+  // font/padding) when there's a lot, so the table always fills the same fixed footprint as the
+  // graph view instead of ever needing a scrollbar.
+  const totalRows = rowIdxs.length + 1; // + header row
+  let tier = TABLE_DENSITY_TIERS[TABLE_DENSITY_TIERS.length - 1];
+  for (const t of TABLE_DENSITY_TIERS) {
+    if (totalRows * t.rowH <= TABLE_PANE_HEIGHT) { tier = t; break; }
+  }
+
   const allPnl = steps.flatMap(s => idxPool.map(i => pnlOf(s.curve[i])));
   const maxAbs = Math.max(1, ...allPnl.map(v => Math.abs(v)));
   const colorFor = (v) => {
@@ -1460,7 +1521,7 @@ function renderPayoffTable(containerId, cfg) {
     steps.forEach((s, i) => { const d = Math.abs((s.t ?? (i / (steps.length - 1))) - cfg.highlightT); if (d < best) { best = d; highlightIdx = i; } });
   }
 
-  let html = '<div class="payoff-table-wrap"><table><thead><tr><th class="pricecol">Price</th>' +
+  let html = `<div class="payoff-table-wrap" style="--tbl-font:${tier.font}px;--tbl-pad-y:${tier.padY}px;--tbl-pad-x:${tier.padX}px"><table><thead><tr><th class="pricecol">Price</th>` +
     steps.map((s, i) => `<th class="${i === highlightIdx ? 'hlcol' : ''}">${s.label}</th>`).join('') + '</tr></thead><tbody>';
   rowIdxs.forEach(idx => {
     const price = basePrices[idx];
