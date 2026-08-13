@@ -154,6 +154,45 @@ namespace LeverageTradingStrategies.Infrastructure.Data
 
             CREATE INDEX IF NOT EXISTS IX_VerticalSpreadMarks_StrategyId_MarkUtc
                 ON VerticalSpreadMarks (VerticalSpreadStrategyId, MarkUtc DESC);
+
+            CREATE TABLE IF NOT EXISTS TqqqAgentDecisions (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CycleUtc TEXT NOT NULL,
+                PortfolioSnapshotJson TEXT NOT NULL,
+                MarketSnapshotJson TEXT NOT NULL,
+                RawAction TEXT NOT NULL,
+                RawConfidence REAL NOT NULL,
+                RawWhy TEXT NOT NULL,
+                Approved INTEGER NOT NULL,
+                FinalAction TEXT NOT NULL,
+                Shares INTEGER NOT NULL,
+                RejectReason TEXT NULL,
+                OrderStatus TEXT NOT NULL DEFAULT 'None',
+                BrokerOrderId TEXT NULL,
+                FillPrice REAL NULL,
+                RealizedPnL REAL NULL,
+                ErrorMessage TEXT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS IX_TqqqAgentDecisions_CycleUtc
+                ON TqqqAgentDecisions (CycleUtc DESC);
+
+            CREATE TABLE IF NOT EXISTS TqqqAgentDailyState (
+                TradeDateEt TEXT PRIMARY KEY,
+                DayStartEquity REAL NOT NULL,
+                CreatedUtc TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS TqqqAgentControlState (
+                Id INTEGER PRIMARY KEY CHECK (Id = 1),
+                IsKilled INTEGER NOT NULL DEFAULT 0,
+                IsPaused INTEGER NOT NULL DEFAULT 0,
+                Reason TEXT NULL,
+                UpdatedUtc TEXT NOT NULL
+            );
+
+            INSERT OR IGNORE INTO TqqqAgentControlState (Id, IsKilled, IsPaused, Reason, UpdatedUtc)
+                VALUES (1, 0, 0, NULL, '1970-01-01T00:00:00.0000000Z');
             """;
 
         public void EnsureCreated()

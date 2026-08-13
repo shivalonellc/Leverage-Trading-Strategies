@@ -156,3 +156,61 @@ CREATE TABLE IF NOT EXISTS VerticalSpreadMarks (
 
 CREATE INDEX IF NOT EXISTS IX_VerticalSpreadMarks_StrategyId_MarkUtc
     ON VerticalSpreadMarks (VerticalSpreadStrategyId, MarkUtc DESC);
+
+-- TQQQ intraday discretionary agent (see TQQQ_Intraday_Agent_Spec_v1.md at repo root). Single
+-- instrument (TQQQ), single live account -- deliberately NOT modeled as a StrategyInstances row;
+-- this module is fully isolated from the shared strategy framework (see spec's architecture
+-- notes) so a bug here can't touch TqqqWeekly/VerticalSpread/OptionsSeller state.
+
+-- One row per decision cycle (default every 5 minutes during market hours) -- the durable audit
+-- trail the whole module is built around. Snapshot columns are the exact JSON handed to/read from
+-- Claude that cycle, kept verbatim so a past decision can be reviewed without reconstructing
+-- market conditions from other tables. FinalAction/Shares/Approved reflect what the validator (9
+-- hard-limit checks, see spec §7) actually allowed -- may differ from RawAction/RawConfidence/RawWhy,
+-- which is Claude's unmodified submit_decision call.
+CREATE TABLE IF NOT EXISTS TqqqAgentDecisions (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CycleUtc TEXT NOT NULL,
+    PortfolioSnapshotJson TEXT NOT NULL,
+    MarketSnapshotJson TEXT NOT NULL,
+    RawAction TEXT NOT NULL,               -- Hold | Buy | Sell, as Claude submitted it
+    RawConfidence REAL NOT NULL,
+    RawWhy TEXT NOT NULL,
+    Approved INTEGER NOT NULL,             -- 1 if the validator allowed FinalAction to proceed to an order attempt
+    FinalAction TEXT NOT NULL,             -- Hold | Buy | Sell, after validator overrides (e.g. forced end-of-day Sell)
+    Shares INTEGER NOT NULL,
+    RejectReason TEXT NULL,                -- set when Approved=0, or when a Sell/Buy was downgraded to a no-op Hold
+    OrderStatus TEXT NOT NULL DEFAULT 'None',  -- None | Submitted | Filled | Failed
+    BrokerOrderId TEXT NULL,
+    FillPrice REAL NULL,
+    RealizedPnL REAL NULL,                 -- populated on a filled Sell only
+    ErrorMessage TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS IX_TqqqAgentDecisions_CycleUtc
+    ON TqqqAgentDecisions (CycleUtc DESC);
+
+-- One row per Eastern trading date, written once (first cycle of the day) and never updated
+-- after that -- the fixed denominator for the daily loss-stop check (spec §7 check 6), which
+-- must NOT drift as TotalEquity moves intraday with today's own realized P&L.
+CREATE TABLE IF NOT EXISTS TqqqAgentDailyState (
+    TradeDateEt TEXT PRIMARY KEY,          -- yyyy-MM-dd, Eastern
+    DayStartEquity REAL NOT NULL,
+    CreatedUtc TEXT NOT NULL
+);
+
+-- Single-row (Id=1 enforced by CHECK) manual control surface for the kill/pause endpoints (spec
+-- task: controller status/kill/pause/resume). IsKilled stops the job from doing anything at all
+-- (including calling Claude); IsPaused still runs forced-flatten/risk logic on any open position
+-- but blocks new entries -- same Running/Paused/Killed distinction TqqqWeeklyLiveTradingJob uses
+-- via StrategyInstances.Status, just single-row since there's only ever one TQQQ agent instance.
+CREATE TABLE IF NOT EXISTS TqqqAgentControlState (
+    Id INTEGER PRIMARY KEY CHECK (Id = 1),
+    IsKilled INTEGER NOT NULL DEFAULT 0,
+    IsPaused INTEGER NOT NULL DEFAULT 0,
+    Reason TEXT NULL,
+    UpdatedUtc TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO TqqqAgentControlState (Id, IsKilled, IsPaused, Reason, UpdatedUtc)
+    VALUES (1, 0, 0, NULL, '1970-01-01T00:00:00.0000000Z');

@@ -7,6 +7,7 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
         public TqqqWeeklyOptions TqqqWeekly { get; set; } = new();
         public TradierOptions Tradier { get; set; } = new();
         public VerticalSpreadOptions VerticalSpread { get; set; } = new();
+        public TqqqAgentOptions TqqqAgent { get; set; } = new();
     }
 
     public class TradingOptions
@@ -128,5 +129,67 @@ namespace LeverageTradingStrategies.Infrastructure.Configuration
         /// responsible for only acting at the right moments (session open, force-close hour,
         /// session close) and being a no-op on every other tick.</summary>
         public string CronSchedule { get; set; } = "0 */5 9-16 ? * MON-FRI";
+    }
+
+    /// <summary>TQQQ intraday discretionary agent (see TQQQ_Intraday_Agent_Spec_v1.md at the
+    /// repo root) — Claude decides Hold/Buy/Sell freely each cycle (no hardcoded strategy rules),
+    /// TqqqAgentValidatorService enforces the 9 hard risk limits afterward, and 100% of order
+    /// placement happens in deterministic C# (TqqqAgentBrokerService), never through anything
+    /// Claude itself invokes. Long-only, day-trade-only, TQQQ only, live Tradier account.
+    ///
+    /// Defaults to Enabled=false and an empty AnthropicApiKey — this job places REAL orders on a
+    /// LIVE account the moment both are set. Do not flip Enabled to true until you've filled in
+    /// AnthropicApiKey below (get one at https://console.anthropic.com/settings/keys) and are
+    /// deliberately ready for it to start trading.</summary>
+    public class TqqqAgentOptions
+    {
+        public bool Enabled { get; set; } = false;
+
+        /// <summary>Fill in your own Anthropic API key here (or via user secrets / an
+        /// environment-variable override of this config path) — never commit a real key to this
+        /// file. Get one at https://console.anthropic.com/settings/keys.</summary>
+        public string AnthropicApiKey { get; set; } = "REPLACE_WITH_YOUR_ANTHROPIC_API_KEY";
+
+        public string AnthropicModel { get; set; } = "claude-sonnet-5";
+        public int AnthropicMaxTokens { get; set; } = 1024;
+        public int AnthropicMaxToolIterations { get; set; } = 6;
+
+        /// <summary>How often the job ticks during market hours, in minutes — used to build the
+        /// Quartz cron trigger at startup (Program.cs). Default 5, per spec.</summary>
+        public int IntervalMinutes { get; set; } = 5;
+
+        // --- Position sizing (spec §8): maxNotional = min(availableCash * EquityUsageFraction,
+        // MaxNotionalCeiling); shares = floor(maxNotional / currentPrice). ---
+        public decimal EquityUsageFraction { get; set; } = 0.85m;
+        public decimal MaxNotionalCeiling { get; set; } = 450m;
+
+        // --- Risk limits (spec §7 checks 5/6) ---
+        public int ConsecutiveLossLimit { get; set; } = 3;
+        public decimal DailyLossStopPct { get; set; } = 0.05m;
+
+        // --- Session timing (ET) -- mirrors TqqqAgentValidatorConfig field-for-field; the job
+        // maps these onto that Domain-layer DTO once per cycle. ---
+        public int MarketOpenHourEt { get; set; } = 9;
+        public int MarketOpenMinuteEt { get; set; } = 30;
+        public int MarketCloseHourEt { get; set; } = 16;
+        public int MarketCloseMinuteEt { get; set; } = 0;
+        public int EntryWindowStartHourEt { get; set; } = 9;
+        public int EntryWindowStartMinuteEt { get; set; } = 35;
+        public int EntryWindowEndHourEt { get; set; } = 15;
+        public int EntryWindowEndMinuteEt { get; set; } = 40;
+        public int ForceFlattenHourEt { get; set; } = 15;
+        public int ForceFlattenMinuteEt { get; set; } = 45;
+
+        /// <summary>Optional floor on Claude's confidence before a Buy is acted on. 0 = disabled
+        /// (default) — per spec §6, Claude has full discretion; this is an off-by-default risk
+        /// knob, not a reasoning constraint.</summary>
+        public double MinConfidenceToAct { get; set; } = 0.0;
+
+        /// <summary>How many recent decisions Claude sees via get_recent_decisions each cycle.</summary>
+        public int RecentDecisionsShownToClaude { get; set; } = 5;
+
+        /// <summary>How many recent decisions the Redis rolling window (ITqqqAgentMemoryService)
+        /// keeps in total -- must be >= RecentDecisionsShownToClaude.</summary>
+        public int MaxRecentDecisionsKept { get; set; } = 20;
     }
 }

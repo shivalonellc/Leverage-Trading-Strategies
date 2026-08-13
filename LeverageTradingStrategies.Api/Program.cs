@@ -1,13 +1,17 @@
+using System.Net.Http.Headers;
 using LeverageTradingStrategies.Api.Jobs;
 using LeverageTradingStrategies.Domain.Options;
 using LeverageTradingStrategies.Domain.Orders;
 using LeverageTradingStrategies.Domain.Tqqq;
+using LeverageTradingStrategies.Domain.TqqqAgent;
 using LeverageTradingStrategies.Infrastructure.Brokers;
 using LeverageTradingStrategies.Infrastructure.Configuration;
 using LeverageTradingStrategies.Infrastructure.Data;
 using LeverageTradingStrategies.Infrastructure.Options;
 using LeverageTradingStrategies.Infrastructure.Quotes;
 using LeverageTradingStrategies.Infrastructure.State;
+using LeverageTradingStrategies.Infrastructure.TqqqAgent;
+using Microsoft.Extensions.Options;
 using Quartz;
 using SchwabApiCS;
 using Serilog;
@@ -92,12 +96,29 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "lts:"; // key prefix -- avoids collisions if this Redis instance is shared with other apps
 });
 
+
+var useVirtual = builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox") ? true :false;
 // --- Tradier (option chain/greeks data ONLY -- order execution stays on Schwab above) ---
-builder.Services.AddScoped<TradierClient>(sp =>
-    new TradierClient(
-        builder.Configuration["AppSettings:Tradier:Token"],
-        builder.Configuration["AppSettings:Tradier:AccountId"],
-        builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox")?false:true));
+
+if (useVirtual)
+{
+    builder.Services.AddScoped<TradierClient>(sp =>
+        new TradierClient(
+            builder.Configuration["AppSettings:Tradier:VirtualToken"],
+            builder.Configuration["AppSettings:Tradier:VirtualAccountId"], false)
+
+           );
+}
+else
+{
+    builder.Services.AddScoped<TradierClient>(sp =>
+        new TradierClient(
+            builder.Configuration["AppSettings:Tradier:Token"],
+            builder.Configuration["AppSettings:Tradier:AccountId"], true)
+
+           );
+}
+
 // TradierOptionsProvider is registered under its own concrete type (not the interface) so the
 // cache decorator below can depend on "the real thing" without DI wiring the decorator to
 // itself. ITradierOptionsProvider (what every controller/job actually injects) resolves to the
@@ -109,6 +130,70 @@ builder.Services.AddScoped<ITradierOptionsProvider, CachedTradierOptionsProvider
 builder.Services.AddScoped<IVerticalSpreadRepository, SqliteVerticalSpreadRepository>();
 builder.Services.AddSingleton<IVerticalSpreadPricingService, VerticalSpreadPricingService>(); // pure math, no state
 builder.Services.AddScoped<IVerticalSpreadOrderExecutor, VerticalSpreadOrderExecutor>();
+
+// --- TQQQ intraday discretionary agent -- see TQQQ_Intraday_Agent_Spec_v1.md at the repo root.
+// Standalone module (own SQLite tables/repositories, own Tradier account wrapper, own Quartz
+// job) -- deliberately isolated from the generic StrategyInstances/IStrategyOrderExecutor
+// framework above and from the option-chain-only TradierClient/TradierOptionsProvider pair.
+// Defaults to Enabled=false and a placeholder Anthropic API key (see AppSettingsOptions.
+// TqqqAgentOptions remarks) -- this places REAL orders on the LIVE Tradier account the moment
+// both are set, so nothing here starts trading on its own. ---
+builder.Services.AddScoped<ITqqqAgentDecisionRepository, SqliteTqqqAgentDecisionRepository>();
+builder.Services.AddScoped<ITqqqAgentStateRepository, SqliteTqqqAgentStateRepository>();
+builder.Services.AddSingleton<ITqqqAgentValidator, TqqqAgentValidatorService>(); // pure, stateless
+builder.Services.AddSingleton<ITqqqAgentSizingService, TqqqAgentSizingService>(); // pure, stateless
+builder.Services.AddScoped<ITqqqAgentMemoryService, TqqqAgentMemoryService>();
+builder.Services.AddScoped<ITqqqAgentBrokerService, TqqqAgentBrokerService>();
+builder.Services.AddScoped<ITqqqAgentMarketDataService, TqqqAgentMarketDataService>();
+
+// Same live/sandbox Tradier account already selected above for TradierClient (useVirtual) --
+// these two hit that same account directly over HttpClient instead of through the
+// tradier-dotnet-client NuGet wrapper (see TradierRestModels.cs for why: this module places
+// real orders, and the wrapper's exact model property names couldn't be verified against
+// primary source in this environment).
+var tradierAgentBaseUrl = useVirtual ? "https://sandbox.tradier.com" : "https://api.tradier.com";
+var tradierAgentToken = useVirtual
+    ? builder.Configuration["AppSettings:Tradier:VirtualToken"]
+    : builder.Configuration["AppSettings:Tradier:Token"];
+var tradierAgentAccountId = useVirtual
+    ? builder.Configuration["AppSettings:Tradier:VirtualAccountId"]
+    : builder.Configuration["AppSettings:Tradier:AccountId"];
+
+builder.Services.AddScoped<ITradierMarketDataRestClient>(sp =>
+{
+    var http = new HttpClient { BaseAddress = new Uri(tradierAgentBaseUrl) };
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tradierAgentToken);
+    http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    return new TradierMarketDataRestClient(http, sp.GetRequiredService<ILogger<TradierMarketDataRestClient>>());
+});
+
+builder.Services.AddScoped<ITradierAccountRestClient>(sp =>
+{
+    var http = new HttpClient { BaseAddress = new Uri(tradierAgentBaseUrl) };
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tradierAgentToken);
+    http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    return new TradierAccountRestClient(http, tradierAgentAccountId ?? string.Empty, sp.GetRequiredService<ILogger<TradierAccountRestClient>>());
+});
+
+builder.Services.AddScoped(sp =>
+{
+    var cfg = sp.GetRequiredService<IOptions<AppSettingsOptions>>().Value.TqqqAgent;
+    return new AnthropicDecisionOptions
+    {
+        Model = cfg.AnthropicModel,
+        MaxTokens = cfg.AnthropicMaxTokens,
+        MaxToolIterations = cfg.AnthropicMaxToolIterations
+    };
+});
+
+builder.Services.AddScoped<IAnthropicDecisionClient>(sp =>
+{
+    var cfg = sp.GetRequiredService<IOptions<AppSettingsOptions>>().Value.TqqqAgent;
+    var http = new HttpClient { BaseAddress = new Uri("https://api.anthropic.com") };
+    http.DefaultRequestHeaders.Add("x-api-key", cfg.AnthropicApiKey);
+    http.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+    return new AnthropicDecisionClient(http, sp.GetRequiredService<AnthropicDecisionOptions>(), sp.GetRequiredService<ILogger<AnthropicDecisionClient>>());
+});
 
 // --- Quartz ---
 builder.Services.AddQuartz(q =>
@@ -130,6 +215,19 @@ builder.Services.AddQuartz(q =>
         .ForJob(spreadJobKey)
         .WithIdentity("VerticalSpreadMarkingJob-trigger")
         .WithCronSchedule(spreadCron));
+
+    var agentJobKey = new JobKey("TqqqAgentJob");
+    q.AddJob<TqqqAgentJob>(opts => opts.WithIdentity(agentJobKey));
+
+    // Cron built from IntervalMinutes (not a raw cron string) so "configurable interval,
+    // default 5 minutes" (spec) is a single friendly number in appsettings.json rather than
+    // requiring the user to hand-edit a cron expression.
+    var agentIntervalMinutes = builder.Configuration.GetValue<int?>("AppSettings:TqqqAgent:IntervalMinutes") ?? 5;
+    var agentCron = $"0 */{agentIntervalMinutes} 9-16 ? * MON-FRI";
+    q.AddTrigger(opts => opts
+        .ForJob(agentJobKey)
+        .WithIdentity("TqqqAgentJob-trigger")
+        .WithCronSchedule(agentCron));
 });
 builder.Services.AddQuartzHostedService(opts => opts.WaitForJobsToComplete = true);
 

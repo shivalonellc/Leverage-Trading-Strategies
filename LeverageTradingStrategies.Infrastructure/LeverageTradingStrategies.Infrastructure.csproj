@@ -11,7 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-    <!-- IDistributedCache interface only -- CachedTradierOptionsProvider depends on the
+    <!-- IDistributedCache interface only - CachedTradierOptionsProvider depends on the
          abstraction, not on Redis itself; the actual Redis client package is referenced from
          the Api project, which is where AddStackExchangeRedisCache is called in Program.cs. -->
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
