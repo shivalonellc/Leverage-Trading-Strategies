@@ -191,6 +191,7 @@
 <div class="tabs">
   <button class="tab-btn active" id="tabBtn-tqqq" onclick="showTab('tqqq')">TQQQ Weekly</button>
   <button class="tab-btn" id="tabBtn-spreads" onclick="showTab('spreads')">Vertical Spreads</button>
+  <button class="tab-btn" id="tabBtn-agent" onclick="showTab('agent')">TQQQ Agent</button>
 </div>
 
 <div class="wrap">
@@ -407,6 +408,80 @@
       <div id="detailEquityChart"></div>
     </div>
   </div>
+
+  <!-- ============ TQQQ AGENT TAB ============ -->
+  <div class="tabpanel" id="tab-agent">
+    <div class="grid">
+      <div class="card">
+        <div class="label">Status</div>
+        <div class="value"><span id="agentStatusBadge" class="badge">…</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Enabled</div>
+        <div class="value" id="agentEnabled">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Cycle Interval</div>
+        <div class="value" id="agentInterval">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Anthropic Model</div>
+        <div class="value" style="font-size:15px" id="agentModel">—</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="dt-header-row">
+        <h2>Controls</h2>
+      </div>
+      <div class="controls">
+        <button id="agentBtnPause" onclick="doAgentAction('pause')">Pause</button>
+        <button id="agentBtnResume" onclick="doAgentAction('resume')">Resume</button>
+        <button id="agentBtnKill" onclick="confirmKillAgent()">Kill (Square Off)</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px" id="agentControlReason"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Position (as of last decision cycle)</h2>
+      <div class="grid">
+        <div class="card"><div class="label">Holding</div><div class="value" id="agentHolding">—</div></div>
+        <div class="card"><div class="label">Quantity</div><div class="value" id="agentQuantity">—</div></div>
+        <div class="card"><div class="label">Entry Price</div><div class="value" id="agentEntryPrice">—</div></div>
+        <div class="card"><div class="label">Cash Available</div><div class="value" id="agentCash">—</div></div>
+        <div class="card"><div class="label">Total Equity</div><div class="value" id="agentEquity">—</div></div>
+        <div class="card"><div class="label">Realized P&amp;L Today</div><div class="value" id="agentPnlToday">—</div></div>
+        <div class="card"><div class="label">Consecutive Losses Today</div><div class="value" id="agentConsecLosses">—</div></div>
+        <div class="card"><div class="label">Halt Active</div><div class="value" id="agentHaltActive">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Risk &amp; Sizing Config</h2>
+      <div class="grid">
+        <div class="card"><div class="label">Equity Usage Fraction</div><div class="value" id="agentEquityFraction">—</div></div>
+        <div class="card"><div class="label">Max Notional Ceiling</div><div class="value" id="agentMaxNotional">—</div></div>
+        <div class="card"><div class="label">Consecutive Loss Limit</div><div class="value" id="agentLossLimit">—</div></div>
+        <div class="card"><div class="label">Daily Loss Stop</div><div class="value" id="agentDailyLossStop">—</div></div>
+        <div class="card"><div class="label">Entry Window (ET)</div><div class="value" style="font-size:16px" id="agentEntryWindow">—</div></div>
+        <div class="card"><div class="label">Force Flatten (ET)</div><div class="value" style="font-size:16px" id="agentForceFlatten">—</div></div>
+        <div class="card"><div class="label">Min Confidence to Act</div><div class="value" id="agentMinConfidence">—</div></div>
+        <div class="card"><div class="label">Anthropic API Key</div><div class="value" id="agentApiKeyStatus">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Decision Log &mdash; Claude's Reasoning</h2>
+      <table>
+        <thead>
+          <tr><th>Cycle (UTC)</th><th>Raw &rarr; Final</th><th>Confidence</th><th>Approved</th><th>Shares</th><th>Order</th><th>Fill</th><th>Realized P&amp;L</th><th>Why / Reject Reason</th></tr>
+        </thead>
+        <tbody id="agentDecisionsBody">
+          <tr><td colspan="9" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ============ STRIKE INFO MODAL ============ -->
@@ -433,14 +508,19 @@ function fmtPct(v) {
 }
 function pnlClass(v) { return v > 0 ? 'green' : (v < 0 ? 'red' : ''); }
 
+let currentTab = 'tqqq';
+
 function showTab(name) {
+  currentTab = name;
   document.querySelectorAll('.tabpanel').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   document.getElementById('tabBtn-' + name).classList.add('active');
   document.getElementById('tqqqControls').style.display = name === 'tqqq' ? 'flex' : 'none';
-  document.getElementById('pageTitle').firstChild.textContent = name === 'tqqq' ? 'TQQQ Weekly Strategy ' : 'Vertical Credit Spreads ';
+  document.getElementById('pageTitle').firstChild.textContent =
+    name === 'tqqq' ? 'TQQQ Weekly Strategy ' : (name === 'agent' ? 'TQQQ Intraday Agent ' : 'Vertical Credit Spreads ');
   if (name === 'spreads') { loadSpreads(); loadTicker(); loadExpirations(); }
+  if (name === 'agent') { refreshAgent(); }
 }
 
 // ============ TQQQ WEEKLY ============
@@ -518,6 +598,7 @@ async function loadOrders() {
 async function refresh() {
   try {
     await Promise.all([loadStatus(), loadOrders()]);
+    if (currentTab === 'agent') await refreshAgent();
     document.getElementById('errorBox').innerHTML = '';
   } catch (e) {
     document.getElementById('errorBox').innerHTML = `<div class="err">Failed to load: ${e.message}</div>`;
@@ -572,6 +653,191 @@ async function confirmKill() {
     }
   } finally {
     refresh();
+  }
+}
+
+// ============ TQQQ AGENT ============
+
+const AGENT_ACTION_NAMES = ['Hold', 'Buy', 'Sell']; // TqqqAgentAction enum -- serialized as an int by default
+
+function agentActionName(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'string') return v; // in case a JsonStringEnumConverter is added later
+  return AGENT_ACTION_NAMES[v] ?? String(v);
+}
+
+function safeParseJson(s) {
+  if (!s) return null;
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+
+async function loadAgentStatus() {
+  const res = await fetch('/api/tqqq-agent/status');
+  if (!res.ok) throw new Error('agent status ' + res.status);
+  const data = await res.json();
+
+  const cfg = data.config ?? {};
+  const cs = data.controlState ?? {};
+  const last = data.lastDecision ?? null;
+
+  const isKilled = cs.isKilled ?? cs.IsKilled;
+  const isPaused = cs.isPaused ?? cs.IsPaused;
+  const status = isKilled ? 'Killed' : (isPaused ? 'Paused' : 'Running');
+  const badge = document.getElementById('agentStatusBadge');
+  badge.textContent = status;
+  badge.className = 'badge ' + status;
+
+  document.getElementById('agentEnabled').textContent = (cfg.enabled ?? cfg.Enabled) ? 'Yes' : 'No';
+  document.getElementById('agentInterval').textContent = (cfg.intervalMinutes ?? cfg.IntervalMinutes ?? '—') + ' min';
+  document.getElementById('agentModel').textContent = cfg.anthropicModel ?? cfg.AnthropicModel ?? '—';
+
+  const reason = cs.reason ?? cs.Reason;
+  document.getElementById('agentControlReason').textContent = reason
+    ? `${status}: ${reason} (updated ${new Date(cs.updatedUtc ?? cs.UpdatedUtc).toLocaleString()})`
+    : '';
+
+  const btnPause = document.getElementById('agentBtnPause');
+  const btnResume = document.getElementById('agentBtnResume');
+  const btnKill = document.getElementById('agentBtnKill');
+  btnPause.disabled = status === 'Paused' || status === 'Killed';
+  btnResume.disabled = status === 'Running';
+  btnKill.disabled = status === 'Killed';
+
+  // Position/portfolio numbers come from the last decision cycle's snapshot (the agent doesn't
+  // expose a standalone live-portfolio endpoint) -- so this reflects the state as of the most
+  // recent cycle, not necessarily this exact second.
+  const portfolio = last ? safeParseJson(last.portfolioSnapshotJson ?? last.PortfolioSnapshotJson) : null;
+  if (portfolio) {
+    const holding = portfolio.holding ?? portfolio.Holding;
+    document.getElementById('agentHolding').textContent = holding ? 'Yes' : 'No';
+    document.getElementById('agentHolding').className = 'value ' + (holding ? 'green' : '');
+    document.getElementById('agentQuantity').textContent = portfolio.quantity ?? portfolio.Quantity ?? 0;
+    document.getElementById('agentEntryPrice').textContent = fmtMoney(portfolio.entryPrice ?? portfolio.EntryPrice);
+    document.getElementById('agentCash').textContent = fmtMoney(portfolio.cashAvailable ?? portfolio.CashAvailable);
+    document.getElementById('agentEquity').textContent = fmtMoney(portfolio.totalEquity ?? portfolio.TotalEquity);
+    const pnlToday = portfolio.realizedPnLToday ?? portfolio.RealizedPnLToday;
+    const pnlEl = document.getElementById('agentPnlToday');
+    pnlEl.textContent = fmtMoney(pnlToday);
+    pnlEl.className = 'value ' + pnlClass(pnlToday);
+    document.getElementById('agentConsecLosses').textContent = portfolio.consecutiveLossesToday ?? portfolio.ConsecutiveLossesToday ?? 0;
+    const halt = portfolio.haltActive ?? portfolio.HaltActive;
+    document.getElementById('agentHaltActive').textContent = halt ? ((portfolio.haltReason ?? portfolio.HaltReason) || 'Yes') : 'No';
+    document.getElementById('agentHaltActive').className = 'value ' + (halt ? 'red' : '');
+  } else {
+    ['agentHolding', 'agentQuantity', 'agentEntryPrice', 'agentCash', 'agentEquity', 'agentPnlToday', 'agentConsecLosses', 'agentHaltActive']
+      .forEach(id => document.getElementById(id).textContent = '—');
+  }
+
+  document.getElementById('agentEquityFraction').textContent = fmtPct(cfg.equityUsageFraction ?? cfg.EquityUsageFraction);
+  document.getElementById('agentMaxNotional').textContent = fmtMoney(cfg.maxNotionalCeiling ?? cfg.MaxNotionalCeiling);
+  document.getElementById('agentLossLimit').textContent = cfg.consecutiveLossLimit ?? cfg.ConsecutiveLossLimit ?? '—';
+  document.getElementById('agentDailyLossStop').textContent = fmtPct(cfg.dailyLossStopPct ?? cfg.DailyLossStopPct);
+
+  const pad2 = n => String(n).padStart(2, '0');
+  const esh = cfg.entryWindowStartHourEt ?? cfg.EntryWindowStartHourEt, esm = cfg.entryWindowStartMinuteEt ?? cfg.EntryWindowStartMinuteEt;
+  const eeh = cfg.entryWindowEndHourEt ?? cfg.EntryWindowEndHourEt, eem = cfg.entryWindowEndMinuteEt ?? cfg.EntryWindowEndMinuteEt;
+  document.getElementById('agentEntryWindow').textContent =
+    (esh !== undefined ? `${pad2(esh)}:${pad2(esm)} – ${pad2(eeh)}:${pad2(eem)}` : '—');
+  const ffh = cfg.forceFlattenHourEt ?? cfg.ForceFlattenHourEt, ffm = cfg.forceFlattenMinuteEt ?? cfg.ForceFlattenMinuteEt;
+  document.getElementById('agentForceFlatten').textContent = (ffh !== undefined ? `${pad2(ffh)}:${pad2(ffm)}` : '—');
+
+  const minConf = cfg.minConfidenceToAct ?? cfg.MinConfidenceToAct;
+  document.getElementById('agentMinConfidence').textContent = minConf ? Number(minConf).toFixed(2) : 'Disabled';
+
+  const keyOk = cfg.anthropicApiKeyConfigured ?? cfg.AnthropicApiKeyConfigured;
+  const keyEl = document.getElementById('agentApiKeyStatus');
+  keyEl.textContent = keyOk ? 'Configured' : 'Not set';
+  keyEl.className = 'value ' + (keyOk ? 'green' : 'red');
+
+  document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
+}
+
+async function loadAgentDecisions() {
+  const res = await fetch('/api/tqqq-agent/decisions?limit=50');
+  if (!res.ok) throw new Error('agent decisions ' + res.status);
+  const decisions = await res.json();
+  const body = document.getElementById('agentDecisionsBody');
+  if (!decisions.length) {
+    body.innerHTML = '<tr><td colspan="9" class="muted">No decisions recorded yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = decisions.map(d => {
+    const raw = agentActionName(d.rawAction ?? d.RawAction);
+    const final = agentActionName(d.finalAction ?? d.FinalAction);
+    const approved = d.approved ?? d.Approved;
+    const status = d.orderStatus ?? d.OrderStatus ?? 'None';
+    const why = d.rawWhy ?? d.RawWhy ?? '';
+    const rejectReason = d.rejectReason ?? d.RejectReason;
+    const errorMessage = d.errorMessage ?? d.ErrorMessage;
+    const reasonText = [why, rejectReason, errorMessage].filter(Boolean).join(' — ');
+    return `<tr>
+      <td>${new Date(d.cycleUtc ?? d.CycleUtc).toLocaleString()}</td>
+      <td class="side-${final}">${raw}${raw !== final ? ' &rarr; ' + final : ''}</td>
+      <td>${((d.rawConfidence ?? d.RawConfidence ?? 0) * 100).toFixed(0)}%</td>
+      <td>${approved ? 'Yes' : 'No'}</td>
+      <td>${d.shares ?? d.Shares ?? 0}</td>
+      <td class="status-${status}">${status}</td>
+      <td>${fmtMoney(d.fillPrice ?? d.FillPrice)}</td>
+      <td class="${pnlClass(d.realizedPnL ?? d.RealizedPnL)}">${fmtMoney(d.realizedPnL ?? d.RealizedPnL)}</td>
+      <td class="reason" title="${(reasonText || '').replace(/"/g, '&quot;')}">${reasonText || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshAgent() {
+  try {
+    await Promise.all([loadAgentStatus(), loadAgentDecisions()]);
+    document.getElementById('errorBox').innerHTML = '';
+  } catch (e) {
+    document.getElementById('errorBox').innerHTML = `<div class="err">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function doAgentAction(action) {
+  if (!confirm(`Are you sure you want to ${action} the TQQQ agent?`)) return;
+  const res = await fetch(`/api/tqqq-agent/${action}`, { method: 'POST' });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) alert('Failed: ' + (body.message || res.status));
+  await refreshAgent();
+}
+
+async function confirmKillAgent() {
+  const btnKill = document.getElementById('agentBtnKill');
+  btnKill.disabled = true;
+  let preview;
+  try {
+    const res = await fetch('/api/tqqq-agent/kill-preview');
+    preview = await res.json();
+    if (!res.ok) {
+      alert('Could not check the broker before killing: ' + (preview.message || res.status) + '\n\nAborting -- try again.');
+      return;
+    }
+  } catch (e) {
+    alert('Could not reach the server to preview the kill. Aborting.');
+    return;
+  } finally {
+    btnKill.disabled = false;
+  }
+
+  const qty = preview.brokerQuantity ?? 0;
+  const promptText = qty > 0
+    ? `KILL SWITCH\n\n${preview.message}\n\nContinue?`
+    : `KILL SWITCH\n\n${preview.message}\n\nContinue?`;
+
+  if (!confirm(promptText)) return;
+
+  try {
+    const res = await fetch('/api/tqqq-agent/kill', { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert('Kill did NOT complete: ' + (body.message || res.status) + '\n\nThe agent was left Paused (not Killed) so nothing is stranded -- you can retry Kill or Resume.');
+    } else {
+      alert('Kill switch executed: ' + (body.squareOff
+        ? `Sold ${body.squareOff.shares} share(s) -- ${body.squareOff.status}`
+        : (body.message || 'done')));
+    }
+  } finally {
+    refreshAgent();
   }
 }
 
