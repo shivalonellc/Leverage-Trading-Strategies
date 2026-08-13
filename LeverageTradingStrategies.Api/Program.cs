@@ -80,13 +80,30 @@ builder.Services.AddScoped<IStrategyOrderExecutor, StrategyOrderExecutor>();
 builder.Services.AddSingleton<ITqqqWeeklyStateStore, SqliteTqqqWeeklyStateStore>();
 builder.Services.AddScoped<ITqqqWeeklyStrategyService, TqqqWeeklyStrategyService>();
 
+// --- Redis-backed distributed cache: short-TTL cache for Tradier chain/expiration lookups,
+// shared by the vertical-spread builder UI, VerticalSpreadMarkingJob, and any concurrent
+// request, so the same symbol+expiration isn't re-fetched from Tradier on every call. The
+// underlying connection is established lazily (on first cache use, not at startup), and
+// CachedTradierOptionsProvider wraps every Redis call in try/catch, so a Redis outage degrades
+// to "no caching" rather than breaking the endpoint. ---
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration["ConnectionStrings:Redis"] ?? "localhost:6379";
+    options.InstanceName = "lts:"; // key prefix -- avoids collisions if this Redis instance is shared with other apps
+});
+
 // --- Tradier (option chain/greeks data ONLY -- order execution stays on Schwab above) ---
 builder.Services.AddScoped<TradierClient>(sp =>
     new TradierClient(
         builder.Configuration["AppSettings:Tradier:Token"],
         builder.Configuration["AppSettings:Tradier:AccountId"],
         builder.Configuration.GetValue<bool>("AppSettings:Tradier:UseSandbox")?false:true));
-builder.Services.AddScoped<ITradierOptionsProvider, TradierOptionsProvider>();
+// TradierOptionsProvider is registered under its own concrete type (not the interface) so the
+// cache decorator below can depend on "the real thing" without DI wiring the decorator to
+// itself. ITradierOptionsProvider (what every controller/job actually injects) resolves to the
+// decorator, which is transparent to callers -- same interface, same method signatures.
+builder.Services.AddScoped<TradierOptionsProvider>();
+builder.Services.AddScoped<ITradierOptionsProvider, CachedTradierOptionsProvider>();
 
 // --- Vertical credit spread module ---
 builder.Services.AddScoped<IVerticalSpreadRepository, SqliteVerticalSpreadRepository>();

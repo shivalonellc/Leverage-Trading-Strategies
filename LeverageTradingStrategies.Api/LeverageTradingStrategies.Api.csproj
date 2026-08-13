@@ -11,6 +11,10 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
+    <!-- Redis-backed IDistributedCache, used by CachedTradierOptionsProvider (Infrastructure
+         project) to cache option chain/expiration lookups. Registered in Program.cs via
+         AddStackExchangeRedisCache; brings in StackExchange.Redis transitively. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.9" />
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.18.2" />
     <PackageReference Include="Serilog" Version="4.4.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
