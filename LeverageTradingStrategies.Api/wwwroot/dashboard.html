@@ -120,15 +120,21 @@
   .view-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
   .ruler-toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
   .link-btn { background: none; border: none; color: var(--blue); font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; }
-  .ruler-scroll { overflow-x: auto; }
+  .ruler-scroll { overflow-x: auto; scroll-behavior: smooth; }
   .wide-spread-badge { display: inline-block; color: var(--amber); font-size: 10px; font-weight: 700; margin-left: 3px; }
   .payoff-table-wrap { overflow-x: auto; }
   .payoff-table-wrap table { font-size: 11px; }
   .payoff-table-wrap th, .payoff-table-wrap td { padding: 5px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
   .payoff-table-wrap th.pricecol, .payoff-table-wrap td.pricecol { text-align: right; position: sticky; left: 0; background: var(--panel); border-right: 1px solid var(--border); }
+  .payoff-table-wrap th.hlcol, .payoff-table-wrap td.hlcol { box-shadow: inset 0 0 0 2px var(--blue); }
   .wall-legend { display: flex; gap: 16px; font-size: 11px; margin-top: 6px; flex-wrap: wrap; }
   .wall-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .wall-legend .sw2 { width: 14px; height: 2px; display: inline-block; }
+
+  /* ---- Graph/Table share the same footprint so toggling doesn't resize the panel; sliders
+     live outside both panes so they drive whichever view is active. ---- */
+  .view-stage { position: relative; }
+  .view-pane { min-height: 452px; max-height: 452px; overflow-y: auto; }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 200; }
   .modal-backdrop.open { display: flex; }
@@ -256,7 +262,6 @@
         <div class="ruler-scroll"><div class="chart-container" id="vsStrikeRuler"></div></div>
         <div class="ruler-toolbar">
           <div class="muted" id="vsChainHint" style="font-size:12px">Pick an expiration to load strikes.</div>
-          <button class="link-btn" id="vsRulerModeBtn" onclick="toggleRulerMode('vs')" style="display:none">Show all strikes</button>
         </div>
       </div>
 
@@ -268,38 +273,40 @@
           <button class="view-btn active" id="vsViewBtn-graph" onclick="setViewMode('vs','graph')">&#9776; Graph</button>
           <button class="view-btn" id="vsViewBtn-table" onclick="setViewMode('vs','table')">&#9638; Table</button>
         </div>
-        <div id="vsGraphView">
-          <div class="chart-container" id="vsPreviewChart"></div>
-          <div class="chart-container" id="vsGexChart" style="height:70px;margin-top:4px"></div>
-          <div class="wall-legend">
-            <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
-            <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
-            <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+        <div class="view-stage">
+          <div id="vsGraphView" class="view-pane">
+            <div class="chart-container" id="vsPreviewChart"></div>
+            <div class="chart-container" id="vsGexChart" style="height:70px;margin-top:4px"></div>
+            <div class="wall-legend">
+              <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
+              <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
+              <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+            </div>
           </div>
-          <div class="slider-row">
-            <span class="muted" style="font-size:11px">Today</span>
-            <input type="range" id="vsDateSlider" min="0" max="100" value="100" oninput="onVsDateSliderChange(this.value)">
-            <span class="muted" style="font-size:11px">Expiration</span>
-            <span class="slider-label" id="vsSliderLabel">At expiration</span>
-          </div>
-          <div class="range-row">
-            <span class="rlabel">RANGE &plusmn;<span id="vsRangeVal">25</span>%</span>
-            <input type="range" id="vsRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('vs')">
-            <button class="range-reset" onclick="resetRange('vs')" title="Reset">&#8634;</button>
-          </div>
-          <div class="range-row">
-            <span class="rlabel">IMPLIED VOLATILITY: <span id="vsIvVal">—</span></span>
-            <input type="range" id="vsIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('vs')" onchange="onIvChange('vs')">
-            <button class="range-reset" onclick="resetIv('vs')" title="Reset">&#8634;</button>
-          </div>
-          <div class="legend">
-            <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
-            <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
-            <span><span class="sw" style="background:#00e88f"></span>Profit</span>
-            <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
-          </div>
+          <div id="vsTableView" class="view-pane" style="display:none"></div>
         </div>
-        <div id="vsTableView" style="display:none"></div>
+        <div class="slider-row">
+          <span class="muted" style="font-size:11px">Today</span>
+          <input type="range" id="vsDateSlider" min="0" max="100" value="100" oninput="onVsDateSliderChange(this.value)">
+          <span class="muted" style="font-size:11px">Expiration</span>
+          <span class="slider-label" id="vsSliderLabel">At expiration</span>
+        </div>
+        <div class="range-row">
+          <span class="rlabel">RANGE &plusmn;<span id="vsRangeVal">25</span>%</span>
+          <input type="range" id="vsRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('vs')">
+          <button class="range-reset" onclick="resetRange('vs')" title="Reset">&#8634;</button>
+        </div>
+        <div class="range-row">
+          <span class="rlabel">IMPLIED VOLATILITY: <span id="vsIvVal">—</span></span>
+          <input type="range" id="vsIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('vs')" onchange="onIvChange('vs')">
+          <button class="range-reset" onclick="resetIv('vs')" title="Reset">&#8634;</button>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
+          <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
+          <span><span class="sw" style="background:#00e88f"></span>Profit</span>
+          <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
+        </div>
 
         <div class="controls" style="margin-top:10px">
           <button class="btn-green" id="btnSaveSpread" onclick="saveSpread()" disabled>Save (Paper)</button>
@@ -328,39 +335,41 @@
         <button class="view-btn active" id="dtViewBtn-graph" onclick="setViewMode('dt','graph')">&#9776; Graph</button>
         <button class="view-btn" id="dtViewBtn-table" onclick="setViewMode('dt','table')">&#9638; Table</button>
       </div>
-      <div id="dtGraphView">
-        <div class="chart-container" id="detailPayoffChart"></div>
-        <div class="chart-container" id="dtGexChart" style="height:70px;margin-top:4px"></div>
-        <div class="wall-legend">
-          <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
-          <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
-          <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+      <div class="view-stage">
+        <div id="dtGraphView" class="view-pane">
+          <div class="chart-container" id="detailPayoffChart"></div>
+          <div class="chart-container" id="dtGexChart" style="height:70px;margin-top:4px"></div>
+          <div class="wall-legend">
+            <span><span class="sw2" style="background:#22e6e6"></span>Call wall</span>
+            <span><span class="sw2" style="background:#ffb020"></span>Put wall</span>
+            <span><span class="sw2" style="background:#b26bff"></span>Gamma exposure</span>
+          </div>
         </div>
-        <div class="slider-row">
-          <span class="muted" style="font-size:11px">Today</span>
-          <input type="range" id="detailDateSlider" min="0" max="7" value="7" oninput="onDateSliderChange(this.value)">
-          <span class="muted" style="font-size:11px">Expiration</span>
-          <span class="slider-label" id="detailSliderLabel">—</span>
-        </div>
-        <div class="range-row">
-          <span class="rlabel">RANGE &plusmn;<span id="dtRangeVal">25</span>%</span>
-          <input type="range" id="dtRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('dt')">
-          <button class="range-reset" onclick="resetRange('dt')" title="Reset">&#8634;</button>
-        </div>
-        <div class="range-row">
-          <span class="rlabel">IMPLIED VOLATILITY: <span id="dtIvVal">—</span></span>
-          <input type="range" id="dtIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('dt')" onchange="onIvChange('dt')">
-          <button class="range-reset" onclick="resetIv('dt')" title="Reset">&#8634;</button>
-        </div>
-        <div class="legend">
-          <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
-          <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
-          <span><span class="sw" style="background:#00e88f"></span>Profit</span>
-          <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
-          <span><span class="dot" style="background:#3d8bff">●</span>Current mark P&amp;L</span>
-        </div>
+        <div id="dtTableView" class="view-pane" style="display:none"></div>
       </div>
-      <div id="dtTableView" style="display:none"></div>
+      <div class="slider-row">
+        <span class="muted" style="font-size:11px">Today</span>
+        <input type="range" id="detailDateSlider" min="0" max="7" value="7" oninput="onDateSliderChange(this.value)">
+        <span class="muted" style="font-size:11px">Expiration</span>
+        <span class="slider-label" id="detailSliderLabel">—</span>
+      </div>
+      <div class="range-row">
+        <span class="rlabel">RANGE &plusmn;<span id="dtRangeVal">25</span>%</span>
+        <input type="range" id="dtRangeSlider" min="5" max="25" value="25" oninput="onRangeChange('dt')">
+        <button class="range-reset" onclick="resetRange('dt')" title="Reset">&#8634;</button>
+      </div>
+      <div class="range-row">
+        <span class="rlabel">IMPLIED VOLATILITY: <span id="dtIvVal">—</span></span>
+        <input type="range" id="dtIvSlider" min="25" max="300" value="100" list="ivTicks" oninput="onIvSliderInput('dt')" onchange="onIvChange('dt')">
+        <button class="range-reset" onclick="resetIv('dt')" title="Reset">&#8634;</button>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#ffb020">A</span>Short strike (sold)</span>
+        <span><span class="dot" style="background:#3d8bff">B</span>Long strike (bought)</span>
+        <span><span class="sw" style="background:#00e88f"></span>Profit</span>
+        <span><span class="sw" style="background:#ff3d5e"></span>Loss</span>
+        <span><span class="dot" style="background:#3d8bff">●</span>Current mark P&amp;L</span>
+      </div>
 
       <h2 style="margin-top:20px">P&amp;L Over Time</h2>
       <div id="detailEquityChart"></div>
@@ -547,7 +556,7 @@ let vsRangeFraction = 0.25;
 let dtRangeFraction = 0.25;
 let vsIvMultiplier = 1.0;
 let dtIvMultiplier = 1.0;
-let vsRulerShowAll = false;
+let vsRulerRecenterPending = false; // set true whenever the strike pool changes (new chain/expiration) so the carousel re-centers once
 let vsViewMode = 'graph';
 let dtViewMode = 'graph';
 let vsWallsGex = null;
@@ -720,7 +729,7 @@ async function loadChainHint() {
   currentFullChain = chain; // both rights, un-filtered -- source for greeks lookups and the call/put-wall + GEX overlay
   const opts = (chain.options || []).filter(o => o.right === right).sort((a, b) => a.strike - b.strike);
   currentChainOptions = opts;
-  vsRulerShowAll = false;
+  vsRulerRecenterPending = true; // new strike pool -- re-center the carousel once it renders
   if (!opts.length) { hint.textContent = 'No ' + right + ' contracts found for this expiration.'; document.getElementById('vsStrikeRuler').innerHTML = ''; return; }
   hint.textContent = `${opts.length} strikes available — drag A or B on the ruler, or click a strike for details.`;
   if (!document.getElementById('vsShortStrike').value) autoPickDefaultStrikes(opts, right);
@@ -754,18 +763,17 @@ function isWideSpreadStrike(strike) {
   return (opt.ask - opt.bid) / opt.mid >= 0.10;
 }
 
-function toggleRulerMode(which) {
-  if (which !== 'vs') return;
-  vsRulerShowAll = !vsRulerShowAll;
-  renderStrikeRulerFromChain();
-}
-
+// Single carousel mode: a fixed-spacing, evenly-distributed pool of liquid/ATM strikes wide
+// enough that it usually overflows the visible width -- .ruler-scroll (overflow-x:auto) turns
+// that into a horizontally scrollable "rolling" strip, so there's no separate show-all toggle
+// to reason about. recenter is only true right after a fresh chain/expiration load, so manual
+// scrolling during a drag session is never fought.
 function renderStrikeRulerFromChain() {
   const shortStrike = parseFloat(document.getElementById('vsShortStrike').value);
   const longStrike = parseFloat(document.getElementById('vsLongStrike').value);
-  const strikes = vsRulerShowAll
-    ? currentChainOptions.map(o => o.strike)
-    : selectRollingStrikes(currentChainOptions, currentSpot, shortStrike, longStrike, 17);
+  const strikes = selectRollingStrikes(currentChainOptions, currentSpot, shortStrike, longStrike, 24);
+  const recenter = vsRulerRecenterPending;
+  vsRulerRecenterPending = false;
 
   renderStrikeRuler('vsStrikeRuler', {
     strikes,
@@ -775,27 +783,22 @@ function renderStrikeRulerFromChain() {
     spot: currentSpot,
     right: document.getElementById('vsRight').value,
     symbol: document.getElementById('vsSymbol').value.trim().toUpperCase(),
-    wide: vsRulerShowAll
+    recenter
   });
-
-  const modeBtn = document.getElementById('vsRulerModeBtn');
-  if (currentChainOptions.length > 17) {
-    modeBtn.style.display = 'inline';
-    modeBtn.textContent = vsRulerShowAll ? 'Show liquid strikes only' : `Show all ${currentChainOptions.length} strikes`;
-  } else {
-    modeBtn.style.display = 'none';
-  }
 }
 
-// commit=false is used while actively dragging a strike handle: it re-renders the ruler
-// locally (cheap, no network) on every mousemove, and only fires the /preview network call
-// once, on mouseup (commit=true) -- see onRulerMouseMove/onRulerMouseUp below. This is both
-// what makes dragging feel responsive and what keeps the server from being hit per-pixel.
+// commit modes: false = local-only re-render (no network, used mid-drag before the click/drag
+// deadzone is crossed -- effectively unused now since the ruler no longer moves anything until
+// a real drag starts); 'throttle' = local re-render + a throttled /preview call so the chart and
+// table follow the drag in near-real-time; true (default) = local re-render + an immediate
+// /preview call (typed input, popup selection, drag release).
 function onStrikeInputChange(commit) {
   document.getElementById('legShortVal').textContent = document.getElementById('vsShortStrike').value || '—';
   document.getElementById('legLongVal').textContent = document.getElementById('vsLongStrike').value || '—';
   renderStrikeRulerFromChain();
-  if (commit !== false) previewSpread();
+  if (commit === false) return;
+  if (commit === 'throttle') previewSpreadThrottled();
+  else previewSpread();
 }
 
 function currentBuildRequest() {
@@ -809,11 +812,30 @@ function currentBuildRequest() {
   };
 }
 
+// ---- Seamless drag: previewSpreadThrottled gives a leading+trailing throttle (fire
+// immediately, coalesce anything that happens while in flight into exactly one more call when
+// it resolves) so the graph/table follow a strike drag in near-real-time without a per-pixel
+// flood of requests. _previewToken guards against an in-flight response from an earlier strike
+// position landing after a newer one and clobbering it. ----
+let _previewToken = 0;
+let _previewInFlight = false;
+let _previewPending = false;
+function previewSpreadThrottled() {
+  if (_previewInFlight) { _previewPending = true; return; }
+  _previewInFlight = true;
+  previewSpread().finally(() => {
+    _previewInFlight = false;
+    if (_previewPending) { _previewPending = false; previewSpreadThrottled(); }
+  });
+}
+
 async function previewSpread() {
   const req = currentBuildRequest();
   if (!req.expirationDate || isNaN(req.shortStrike) || isNaN(req.longStrike)) return;
+  const myToken = ++_previewToken;
   const res = await fetch(`/api/vertical-spread/preview?ivMultiplier=${vsIvMultiplier}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
   const body = await res.json();
+  if (myToken !== _previewToken) return; // a newer request already superseded this one -- drop the stale response
   if (!res.ok) { document.getElementById('vsPreviewBox').style.display = 'none'; document.getElementById('btnSaveSpread').disabled = true; return; }
 
   window._lastPreviewReq = req;
@@ -834,7 +856,6 @@ async function previewSpread() {
   const slider = document.getElementById('vsDateSlider');
   onVsDateSliderChange(slider.value);
   document.getElementById('btnSaveSpread').disabled = false;
-  if (vsViewMode === 'table') renderVsTable();
 }
 
 function onVsDateSliderChange(val) {
@@ -851,8 +872,9 @@ function onVsDateSliderChange(val) {
     shortStrike: req.shortStrike, longStrike: req.longStrike, rangeFraction: vsRangeFraction,
     callWall: vsWallsGex ? vsWallsGex.callWall : null, putWall: vsWallsGex ? vsWallsGex.putWall : null
   });
-  renderGexChart('vsGexChart', { gexBars: vsWallsGex ? vsWallsGex.gexBars : [], currentUnderlyingPrice: payoff.currentUnderlyingPrice, rangeFraction: vsRangeFraction });
+  renderGexChart('vsGexChart', { gexBars: vsWallsGex ? vsWallsGex.gexBars : [], currentUnderlyingPrice: payoff.currentUnderlyingPrice, rangeFraction: vsRangeFraction, callWall: vsWallsGex ? vsWallsGex.callWall : null, putWall: vsWallsGex ? vsWallsGex.putWall : null });
   document.getElementById('vsSliderLabel').textContent = t >= 0.999 ? 'At expiration' : (t <= 0.001 ? 'Today' : `${Math.round(t * 100)}% to expiration`);
+  if (vsViewMode === 'table') renderVsTable();
 }
 
 // ---- IV "what-if" slider: the slider position is a multiplier (25%-300%, x1 = live chain
@@ -928,12 +950,23 @@ function renderGexChart(containerId, cfg) {
   const barW = Math.max(2, (w - padL - padR) / visible.length * 0.7);
 
   let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">`;
+  // Strong translucent full-height wash behind the bars so the whole GEX strip pops rather than
+  // reading as a thin sliver of purple ticks -- matches the wall highlighting on the main chart.
+  svg += `<rect x="${padL}" y="0" width="${w - padL - padR}" height="${h}" fill="#b26bff" opacity="0.08"/>`;
+  const wallTick = (strike, color) => {
+    if (strike == null || strike < xMin || strike > xMax) return '';
+    const x = xScale(strike);
+    return `<rect x="${(x - 4).toFixed(1)}" y="0" width="8" height="${h}" fill="${color}" opacity="0.22"/>` +
+      `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${h}" stroke="${color}" stroke-width="2" opacity="0.9"/>`;
+  };
+  svg += wallTick(cfg.callWall, '#22e6e6');
+  svg += wallTick(cfg.putWall, '#ffb020');
   svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="1"/>`;
   visible.forEach(b => {
     const x = xScale(b.strike);
     const barH = Math.abs(b.gex) / maxAbs * (h / 2 - 4);
     const y = b.gex >= 0 ? midY - barH : midY;
-    svg += `<rect x="${(x - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="#b26bff" fill-opacity="0.75"/>`;
+    svg += `<rect x="${(x - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="#b26bff" fill-opacity="0.9" stroke="#d9b3ff" stroke-width="0.5"/>`;
   });
   svg += `<text x="${padL - 8}" y="${(midY + 3).toFixed(1)}" fill="#6b7280" font-size="9" text-anchor="end">GEX</text>`;
   svg += `</svg>`;
@@ -1093,9 +1126,7 @@ async function reloadDetailTimeline(resetSlider) {
   const slider = document.getElementById('detailDateSlider');
   slider.max = timeline.steps.length - 1;
   if (resetSlider) slider.value = slider.max;
-  onDateSliderChange(slider.value);
-
-  if (dtViewMode === 'table') renderDtTable();
+  onDateSliderChange(slider.value); // also refreshes the table when dtViewMode === 'table'
 }
 
 function findChainLeg(chain, right, strike) {
@@ -1122,11 +1153,12 @@ function onDateSliderChange(idx) {
     callWall: dtWallsGex ? dtWallsGex.callWall : null,
     putWall: dtWallsGex ? dtWallsGex.putWall : null
   });
-  renderGexChart('dtGexChart', { gexBars: dtWallsGex ? dtWallsGex.gexBars : [], currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice, rangeFraction: dtRangeFraction });
+  renderGexChart('dtGexChart', { gexBars: dtWallsGex ? dtWallsGex.gexBars : [], currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice, rangeFraction: dtRangeFraction, callWall: dtWallsGex ? dtWallsGex.callWall : null, putWall: dtWallsGex ? dtWallsGex.putWall : null });
 
   const d = new Date(step.asOfDate);
   const label = idx === 0 ? 'Today' : (step.daysToExpiration === 0 ? 'Expiration' : `${d.toLocaleDateString()} (${step.daysToExpiration}d left)`);
   document.getElementById('detailSliderLabel').textContent = label;
+  if (dtViewMode === 'table') renderDtTable();
 }
 
 // ---- Icons + stats strip (OptionStrat-style horizontal stat row) ----
@@ -1193,71 +1225,104 @@ function setViewMode(which, mode) {
 
 // Preview (unsaved candidate) doesn't have a saved-id timeline endpoint to hit, so the table
 // view interpolates the same way the date slider does: a handful of evenly-spaced points
-// between the Today and AtExpiration curves already returned by /preview.
+// between the Today and AtExpiration curves already returned by /preview. Each step carries its
+// own t (0=today..1=expiration) so the table can highlight whichever column the date slider is
+// currently nearest to.
 function buildPreviewTimelineSteps(payoff, count) {
   count = count || 6;
   const steps = [];
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1);
     const curve = payoff.today.map((p, idx) => ({ underlyingPrice: p.underlyingPrice, pnL: pnlOf(p) * (1 - t) + pnlOf(payoff.atExpiration[idx]) * t }));
-    steps.push({ label: t === 0 ? 'Today' : (t === 1 ? 'Expir.' : Math.round(t * 100) + '%'), curve });
+    steps.push({ label: t === 0 ? 'Today' : (t === 1 ? 'Expir.' : Math.round(t * 100) + '%'), t, curve });
   }
   return steps;
 }
 
+// The table reacts to the same Today/Range/IV sliders as the graph: IV is already baked into
+// the payoff data by the time we get here (previewSpread/reloadDetailTimeline re-fetch on IV
+// change), range trims which price rows are shown, and the date slider highlights the column
+// nearest its position.
 function renderVsTable() {
   const payoff = window._lastPreviewPayoff;
   const req = window._lastPreviewReq;
   if (!payoff || !req) { document.getElementById('vsTableView').innerHTML = ''; return; }
   const steps = buildPreviewTimelineSteps(payoff, 6);
+  const dateT = parseInt(document.getElementById('vsDateSlider').value) / 100;
   renderPayoffTable('vsTableView', {
     steps, shortStrike: req.shortStrike, longStrike: req.longStrike,
-    breakevenPrice: payoff.breakevenPrice, currentUnderlyingPrice: payoff.currentUnderlyingPrice
+    breakevenPrice: payoff.breakevenPrice, currentUnderlyingPrice: payoff.currentUnderlyingPrice,
+    rangeFraction: vsRangeFraction, highlightT: dateT
   });
 }
 
 function renderDtTable() {
   if (!currentTimeline) { document.getElementById('dtTableView').innerHTML = ''; return; }
   const strategy = currentDetailStrategy || {};
-  const steps = currentTimeline.steps.map(s => ({ label: s.daysToExpiration === 0 ? 'Expir.' : `${s.daysToExpiration}d`, curve: s.curve }));
+  const maxDays = Math.max(1, ...currentTimeline.steps.map(s => s.daysToExpiration));
+  const steps = currentTimeline.steps.map(s => ({
+    label: s.daysToExpiration === 0 ? 'Expir.' : `${s.daysToExpiration}d`,
+    t: 1 - (s.daysToExpiration / maxDays),
+    curve: s.curve
+  }));
+  const dateSlider = document.getElementById('detailDateSlider');
+  const dateMax = parseInt(dateSlider.max) || 1;
+  const dateT = parseInt(dateSlider.value) / dateMax;
   renderPayoffTable('dtTableView', {
     steps, shortStrike: strategy.shortStrike, longStrike: strategy.longStrike,
-    breakevenPrice: currentTimeline.breakevenPrice, currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice
+    breakevenPrice: currentTimeline.breakevenPrice, currentUnderlyingPrice: currentTimeline.currentUnderlyingPrice,
+    rangeFraction: dtRangeFraction, highlightT: dateT
   });
 }
 
 // Strike (price) x date grid, color-coded green/red by P&L magnitude -- the "Table" view
-// alternative to the payoff chart, same underlying curves.
+// alternative to the payoff chart, same underlying curves. rangeFraction trims rows to the same
+// price window the RANGE slider applies to the chart; highlightT bolds the date column nearest
+// the Today/Expiration slider so all three sliders visibly drive the table, not just the graph.
 function renderPayoffTable(containerId, cfg) {
   const el = document.getElementById(containerId);
   const steps = cfg.steps || [];
   if (!steps.length || !steps[0].curve || !steps[0].curve.length) { el.innerHTML = '<div class="muted">No data.</div>'; return; }
 
   const basePrices = steps[0].curve.map(p => p.underlyingPrice);
-  const n = basePrices.length;
+  let idxPool = basePrices.map((_, i) => i);
+  if (cfg.rangeFraction && cfg.currentUnderlyingPrice) {
+    const lo = cfg.currentUnderlyingPrice * (1 - cfg.rangeFraction);
+    const hi = cfg.currentUnderlyingPrice * (1 + cfg.rangeFraction);
+    const filtered = idxPool.filter(i => basePrices[i] >= lo && basePrices[i] <= hi);
+    if (filtered.length >= 2) idxPool = filtered;
+  }
+
+  const n = idxPool.length;
   const maxRows = 20;
   const rowStep = Math.max(1, Math.floor(n / maxRows));
   const rowIdxs = [];
-  for (let i = n - 1; i >= 0; i -= rowStep) rowIdxs.push(i);
-  if (rowIdxs[rowIdxs.length - 1] !== 0) rowIdxs.push(0);
+  for (let k = n - 1; k >= 0; k -= rowStep) rowIdxs.push(idxPool[k]);
+  if (rowIdxs[rowIdxs.length - 1] !== idxPool[0]) rowIdxs.push(idxPool[0]);
 
-  const allPnl = steps.flatMap(s => s.curve.map(pnlOf));
+  const allPnl = steps.flatMap(s => idxPool.map(i => pnlOf(s.curve[i])));
   const maxAbs = Math.max(1, ...allPnl.map(v => Math.abs(v)));
   const colorFor = (v) => {
     const t = Math.max(-1, Math.min(1, v / maxAbs));
     return t >= 0 ? `rgba(0,232,143,${(0.12 + t * 0.55).toFixed(2)})` : `rgba(255,61,94,${(0.12 + -t * 0.55).toFixed(2)})`;
   };
 
+  let highlightIdx = -1;
+  if (cfg.highlightT != null) {
+    let best = Infinity;
+    steps.forEach((s, i) => { const d = Math.abs((s.t ?? (i / (steps.length - 1))) - cfg.highlightT); if (d < best) { best = d; highlightIdx = i; } });
+  }
+
   let html = '<div class="payoff-table-wrap"><table><thead><tr><th class="pricecol">Price</th>' +
-    steps.map(s => `<th>${s.label}</th>`).join('') + '</tr></thead><tbody>';
+    steps.map((s, i) => `<th class="${i === highlightIdx ? 'hlcol' : ''}">${s.label}</th>`).join('') + '</tr></thead><tbody>';
   rowIdxs.forEach(idx => {
     const price = basePrices[idx];
     const pctFromSpot = cfg.currentUnderlyingPrice ? ((price - cfg.currentUnderlyingPrice) / cfg.currentUnderlyingPrice * 100) : null;
     html += '<tr>';
     html += `<td class="pricecol">$${price.toFixed(2)}${pctFromSpot != null ? `<div class="muted" style="font-size:9px">${pctFromSpot >= 0 ? '+' : ''}${pctFromSpot.toFixed(1)}%</div>` : ''}</td>`;
-    steps.forEach(s => {
+    steps.forEach((s, i) => {
       const pnl = pnlOf(s.curve[idx]);
-      html += `<td style="background:${colorFor(pnl)}">${Math.round(pnl)}</td>`;
+      html += `<td class="${i === highlightIdx ? 'hlcol' : ''}" style="background:${colorFor(pnl)}">${Math.round(pnl)}</td>`;
     });
     html += '</tr>';
   });
@@ -1348,42 +1413,54 @@ let rulerLayout = null;
 let rulerDragLeg = null;
 let rulerDragStart = null;
 
+// Rolling carousel: strikes sit at fixed, evenly-spaced pixel slots (index * SPACING) rather
+// than at their literal price position -- this is what makes it read/feel like a carousel of
+// discrete stops instead of a price axis, and it's also what makes the baseline track exactly
+// as wide as the strikes actually loaded (no empty "crossbar" hanging off the right edge of a
+// sparse chain). The SVG's width attribute equals its viewBox width 1:1 (no % stretching), so
+// when the pool is wider than the visible .ruler-scroll container it simply overflows and the
+// container's overflow-x:auto turns that into the scrollable carousel.
+const RULER_SPACING = 52;
+
+function rulerPriceToX(strikes, padL, price) {
+  if (!strikes.length) return padL;
+  if (price <= strikes[0]) return padL;
+  if (price >= strikes[strikes.length - 1]) return padL + (strikes.length - 1) * RULER_SPACING;
+  for (let i = 0; i < strikes.length - 1; i++) {
+    if (price >= strikes[i] && price <= strikes[i + 1]) {
+      const frac = (price - strikes[i]) / ((strikes[i + 1] - strikes[i]) || 1);
+      return padL + (i + frac) * RULER_SPACING;
+    }
+  }
+  return padL;
+}
+
 function renderStrikeRuler(containerId, cfg) {
   const el = document.getElementById(containerId);
   const strikes = cfg.strikes || [];
   if (!strikes.length) { el.innerHTML = '<div class="muted" style="font-size:12px">No strikes loaded.</div>'; return; }
 
-  // "Show all strikes" mode renders at a fixed pixel width (wider than the container) instead
-  // of 100%, so the .ruler-scroll wrapper's overflow-x:auto kicks in and the ruler becomes a
-  // scrollable/"rolling" control -- the default filtered view never needs to scroll.
-  const w = cfg.wide ? Math.max(720, strikes.length * 26) : 720;
-  const h = 90, padL = 24, padR = 24, midY = 45;
-  const xs = strikes.concat(cfg.spot ? [cfg.spot] : []);
-  const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const span = (xMax - xMin) || 1;
-  const xScale = x => padL + (x - xMin) / span * (w - padL - padR);
-  rulerLayout = { w, padL, padR, xMin, span, strikes };
+  const padL = 24, padR = 24, h = 90, midY = 45;
+  const w = padL + Math.max(0, strikes.length - 1) * RULER_SPACING + padR;
+  const xScale = i => padL + i * RULER_SPACING; // i = strike index, not price
+  rulerLayout = { padL, spacing: RULER_SPACING, w, strikes };
 
-  let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="${cfg.wide ? w : '100%'}" height="${h}" style="overflow:visible;cursor:pointer">`;
-  svg += `<line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="#2a2e38" stroke-width="2"/>`;
-  strikes.forEach(s => {
-    const x = xScale(s);
-    svg += `<line x1="${x.toFixed(1)}" y1="${midY - 5}" x2="${x.toFixed(1)}" y2="${midY + 5}" stroke="#4a5060" stroke-width="1"/>`;
-  });
-  const labelEvery = cfg.wide ? 1 : Math.max(1, Math.ceil(strikes.length / 12));
+  let svg = `<svg id="${containerId}-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="overflow:visible;cursor:pointer">`;
+  svg += `<line x1="${padL}" y1="${midY}" x2="${(w - padR).toFixed(1)}" y2="${midY}" stroke="#2a2e38" stroke-width="2"/>`;
   strikes.forEach((s, i) => {
-    if (i % labelEvery !== 0) return;
-    const x = xScale(s);
+    const x = xScale(i);
+    svg += `<line x1="${x.toFixed(1)}" y1="${midY - 5}" x2="${x.toFixed(1)}" y2="${midY + 5}" stroke="#4a5060" stroke-width="1"/>`;
     svg += `<text x="${x.toFixed(1)}" y="${midY + 22}" fill="#8b93a1" font-size="9" text-anchor="middle">${s}</text>`;
   });
   if (cfg.spot) {
-    const sx = xScale(cfg.spot);
+    const sx = rulerPriceToX(strikes, padL, cfg.spot);
     svg += `<polygon points="${(sx - 5).toFixed(1)},${midY - 16} ${(sx + 5).toFixed(1)},${midY - 16} ${sx.toFixed(1)},${midY - 6}" fill="#e6e8ec"/>`;
     svg += `<text x="${sx.toFixed(1)}" y="${midY - 20}" fill="#e6e8ec" font-size="9" text-anchor="middle">${cfg.symbol || ''}</text>`;
   }
   const pill = (strike, label, color, above, leg) => {
     if (strike == null || isNaN(strike)) return '';
-    const x = xScale(strike);
+    const idx = strikes.indexOf(strike);
+    const x = idx >= 0 ? xScale(idx) : rulerPriceToX(strikes, padL, strike);
     const y = above ? midY - 30 : midY + 30;
     const pw = Math.max(40, label.length * 6.5 + 12);
     return `<g data-leg="${leg}" style="cursor:grab">` +
@@ -1400,16 +1477,23 @@ function renderStrikeRuler(containerId, cfg) {
 
   const svgEl = document.getElementById(containerId + '-svg');
   svgEl.addEventListener('mousedown', onRulerMouseDown);
+
+  if (cfg.recenter) {
+    const wrap = el.parentElement; // .ruler-scroll
+    if (wrap) {
+      const targetX = cfg.spot != null ? rulerPriceToX(strikes, padL, cfg.spot) : xScale(Math.round((strikes.length - 1) / 2));
+      requestAnimationFrame(() => { wrap.scrollLeft = Math.max(0, targetX - wrap.clientWidth / 2); });
+    }
+  }
 }
 
 function rulerNearestStrike(ev, svgEl) {
   if (!rulerLayout) return null;
   const rect = svgEl.getBoundingClientRect();
   const px = (ev.clientX - rect.left) / rect.width * rulerLayout.w;
-  const priceAtCursor = rulerLayout.xMin + (px - rulerLayout.padL) / (rulerLayout.w - rulerLayout.padL - rulerLayout.padR) * rulerLayout.span;
-  let nearest = rulerLayout.strikes[0], nd = Infinity;
-  for (const s of rulerLayout.strikes) { const d = Math.abs(s - priceAtCursor); if (d < nd) { nd = d; nearest = s; } }
-  return nearest;
+  let idx = Math.round((px - rulerLayout.padL) / rulerLayout.spacing);
+  idx = Math.max(0, Math.min(rulerLayout.strikes.length - 1, idx));
+  return rulerLayout.strikes[idx];
 }
 
 function applyRulerPosition(ev, svgEl, commit) {
@@ -1423,39 +1507,44 @@ function applyRulerPosition(ev, svgEl, commit) {
 }
 
 // Grabbing a pill (data-leg on the <g>) always drags that leg; mousedown on empty track falls
-// back to whichever leg the A/B toggle buttons currently have active. rulerDragStart tracks
-// where the drag began so mouseup (below) can tell a plain click on a pill (opens the info
-// popup) apart from an actual drag (commits a new strike).
+// back to whichever leg the A/B toggle buttons currently have active. Nothing moves on
+// mousedown itself -- only once the mouse has actually traveled past a small deadzone (see
+// mousemove below) does a strike change happen at all, so a plain click never nudges a strike.
 function onRulerMouseDown(ev) {
-  const svgEl = ev.currentTarget;
   const handle = ev.target.closest && ev.target.closest('[data-leg]');
   const leg = handle ? handle.getAttribute('data-leg') : activeLeg;
-  setActiveLeg(leg);
   rulerDragLeg = leg;
-  rulerDragStart = { x: ev.clientX, y: ev.clientY, wasHandle: !!handle };
-  applyRulerPosition(ev, svgEl, false);
+  rulerDragStart = { x: ev.clientX, y: ev.clientY, wasHandle: !!handle, moved: false };
   ev.preventDefault();
 }
 
 // Attached once at load (not per-render) so the drag continues smoothly even while the ruler
-// itself is being re-rendered on every intermediate step.
+// itself is being re-rendered on every intermediate step. Movement inside the 5px deadzone is
+// ignored entirely (that's what makes a plain click a true no-op); once real dragging starts,
+// each step re-renders the ruler locally AND fires a throttled /preview call so the payoff
+// chart/table track the drag live instead of only updating once on release.
 document.addEventListener('mousemove', (ev) => {
-  if (!rulerDragLeg) return;
+  if (!rulerDragLeg || !rulerDragStart) return;
+  const start = rulerDragStart;
+  const moved = Math.hypot(ev.clientX - start.x, ev.clientY - start.y);
+  if (!start.moved && moved < 5) return;
+  if (!start.moved) { start.moved = true; setActiveLeg(rulerDragLeg); }
   const svgEl = document.getElementById('vsStrikeRuler-svg');
-  if (svgEl) applyRulerPosition(ev, svgEl, false);
+  if (svgEl) applyRulerPosition(ev, svgEl, 'throttle');
 });
 document.addEventListener('mouseup', (ev) => {
   if (!rulerDragLeg) return;
   const leg = rulerDragLeg;
   const start = rulerDragStart;
+  const wasRealDrag = !!(start && start.moved);
   rulerDragLeg = null;
   rulerDragStart = null;
-  const moved = start ? Math.hypot(ev.clientX - start.x, ev.clientY - start.y) : 999;
-  if (start && start.wasHandle && moved < 5) {
-    openStrikeInfoPopup(leg); // plain click on an already-placed pill -- show its info instead of a no-op commit
-  } else {
-    previewSpread(); // drag commit: exactly one network call, at drag end
+  if (!wasRealDrag) {
+    if (start && start.wasHandle) openStrikeInfoPopup(leg); // plain click on a pill -- show its info, never move it
+    return; // plain click anywhere else on the ruler: no-op
   }
+  const svgEl = document.getElementById('vsStrikeRuler-svg');
+  if (svgEl) applyRulerPosition(ev, svgEl, true); // final authoritative commit, guaranteed even if the last throttled call was dropped
 });
 
 // ---- Lightweight inline-SVG payoff chart (no external chart library) ----
@@ -1548,12 +1637,19 @@ function renderPayoffChart(containerId, cfg) {
   // Call wall / put wall: the OI-heaviest call/put strike for this expiration -- often watched
   // as informal resistance/support levels. Computed client-side (computeWallsAndGex) from the
   // full both-rights chain, independent of which right this spread itself trades.
+  // Strong highlight: a translucent full-height band plus a solid-background label pill (dark
+  // text on the bright wall color), instead of a thin dashed line + colored text, so call
+  // wall/put wall actually pop against the chart instead of blending in.
   const wallLine = (strike, text, color) => {
     if (strike == null) return '';
     const x = xScale(strike);
     if (x < padL || x > w - padR) return '';
-    return `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h - padB}" stroke="${color}" stroke-width="1.2" stroke-dasharray="6,3" opacity="0.55"/>` +
-      `<text x="${x.toFixed(1)}" y="${(h - 8).toFixed(1)}" fill="${color}" font-size="8" font-weight="700" text-anchor="middle">${text}</text>`;
+    const bandW = 9;
+    const lw = text.length * 5.6 + 12;
+    return `<rect x="${(x - bandW / 2).toFixed(1)}" y="${padT}" width="${bandW}" height="${(h - padT - padB).toFixed(1)}" fill="${color}" opacity="0.20"/>` +
+      `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h - padB}" stroke="${color}" stroke-width="2" opacity="0.9"/>` +
+      `<rect x="${(x - lw / 2).toFixed(1)}" y="${(h - 21).toFixed(1)}" width="${lw.toFixed(1)}" height="15" rx="3" fill="${color}"/>` +
+      `<text x="${x.toFixed(1)}" y="${(h - 10.5).toFixed(1)}" fill="#0f1115" font-size="9" font-weight="700" text-anchor="middle">${text}</text>`;
   };
   svg += wallLine(cfg.callWall, 'CALL WALL', '#22e6e6');
   svg += wallLine(cfg.putWall, 'PUT WALL', '#ffb020');
